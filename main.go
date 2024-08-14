@@ -1,7 +1,13 @@
 package main
 
-import "fmt"
+import (
+	"github.com/alexflint/go-arg"
+	"github.com/tforceaio/tf-unifiler-go/cmd"
+)
+
+var invokeArgs cmd.Args
 
 func main() {
-	fmt.Println("Hello, World!")
+	invokeArgs = cmd.Args{}
+	arg.MustParse(&invokeArgs)
 }
