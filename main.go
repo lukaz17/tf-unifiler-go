@@ -10,4 +10,8 @@ var invokeArgs cmd.Args
 func main() {
 	invokeArgs = cmd.Args{}
 	arg.MustParse(&invokeArgs)
+
+	if invokeArgs.Hash != nil {
+		Hash(invokeArgs.Hash)
+	}
 }
