@@ -1,6 +1,7 @@
 package filesystem
 
 import (
+	"bufio"
 	"os"
 	"path/filepath"
 
@@ -32,6 +33,11 @@ func CreateEntry(fPath string) (*FsEntry, error) {
 	return entry, nil
 }
 
+func IsExist(fPath string) bool {
+	_, err := os.Stat(fPath)
+	return !os.IsNotExist(err)
+}
+
 func IsFile(fPath string) (bool, error) {
 	fileInfo, err := os.Lstat(fPath)
 	if err != nil {
@@ -46,6 +52,14 @@ func IsFileUnsafe(fPath string) bool {
 		panic(err)
 	}
 	return isFile
+}
+
+func IsFileExist(fPath string) bool {
+	fileInfo, err := os.Stat(fPath)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return !fileInfo.IsDir()
 }
 
 func GetPaths(entries []*FsEntry) []string {
@@ -82,4 +96,20 @@ func List(fPaths []string, recursive bool) ([]*FsEntry, error) {
 		}
 	}
 	return contents, nil
+}
+
+func WriteLines(fPath string, lines []string) error {
+	f, err := os.OpenFile(fPath, os.O_WRONLY|os.O_CREATE, 0664)
+	if err != nil {
+		return err
+	}
+
+	writer := bufio.NewWriter(f)
+	for _, line := range lines {
+		writer.WriteString(line)
+		writer.WriteString("\n")
+	}
+	writer.Flush()
+
+	return nil
 }

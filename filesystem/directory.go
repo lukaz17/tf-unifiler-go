@@ -6,6 +6,10 @@ import (
 	"path/filepath"
 )
 
+func CreateDirectory(dPath string) error {
+	return os.Mkdir(dPath, 0755)
+}
+
 func IsDirectory(dPath string) (bool, error) {
 	fileInfo, err := os.Lstat(dPath)
 	if err != nil {
@@ -20,6 +24,14 @@ func IsDirectoryUnsafe(dPath string) bool {
 		panic(err)
 	}
 	return isDir
+}
+
+func IsDirectoryExist(fPath string) bool {
+	fileInfo, err := os.Stat(fPath)
+	if os.IsNotExist(err) {
+		return false
+	}
+	return fileInfo.IsDir()
 }
 
 func listDirectory(dPath string) ([]*FsEntry, error) {
