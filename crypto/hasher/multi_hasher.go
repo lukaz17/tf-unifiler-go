@@ -9,6 +9,8 @@ import (
 	"hash"
 	"io"
 	"os"
+
+	"github.com/tforceaio/tf-unifiler-go/extension"
 )
 
 type HashResult struct {
@@ -84,6 +86,7 @@ func Hash(fPath string, algorithms []string) ([]*HashResult, error) {
 			}
 			break
 		}
+		logger.Info().Array("algos", extension.ZerolifyStrings(algorithms)).Str("file", fPath).Int("size", int(written)).Msgf("Hashed '%s' (%d bytes)", fPath, written)
 	}
 	if err != nil {
 		return []*HashResult{}, err

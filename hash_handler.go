@@ -6,32 +6,46 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
 	"github.com/tforceaio/tf-unifiler-go/crypto/hasher"
+	"github.com/tforceaio/tf-unifiler-go/extension"
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 )
 
-func Hash(args *cmd.HashCmd) {
+type HashModule struct {
+	logger zerolog.Logger
+}
+
+func (m *HashModule) Hash(args *cmd.HashCmd) {
 	if args.Create != nil {
-		CreateHash(args.Create)
+		m.CreateHash(args.Create)
 	} else {
-		println("Hash: Invalid arguments")
+		m.logger.Error().Msg("Invalid arguments")
 	}
 }
 
-func CreateHash(args *cmd.HashCreateCmd) {
+func (m *HashModule) CreateHash(args *cmd.HashCreateCmd) {
 	if len(args.Files) == 0 {
-		println("CreateHash: No input file")
+		m.logger.Error().Msg("No input file")
 		return
 	}
 	if len(args.Algorithms) == 0 {
-		println("CreateHash: No hash algorithm")
+		m.logger.Error().Msg("No hash algorithm")
 		return
 	}
+	m.logger.Info().
+		Array("algos", extension.ZerolifyStrings(args.Algorithms)).
+		Array("files", extension.ZerolifyStrings(args.Files)).
+		Str("output", args.Output).
+		Msgf("Start computing hash")
+
 	contents, err := filesystem.List(args.Files, true)
 	if err != nil {
-		fmt.Printf("CreateHash: Error listing input files. %v", err)
+		m.logger.Err(err).Msg("Error listing input files")
+		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
+		return
 	}
 
 	hResults := []*hasher.HashResult{}
@@ -41,7 +55,9 @@ func CreateHash(args *cmd.HashCreateCmd) {
 		}
 		fhResults, err := hasher.Hash(c.RelativePath, args.Algorithms)
 		if err != nil {
-			fmt.Printf("CreateHash: Failed to hash '%s'. %v", c.RelativePath, err)
+			m.logger.Err(err).Msgf("Error computing hash for '%s'", c.RelativePath)
+			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
+			return
 		}
 		hResults = append(hResults, fhResults...)
 	}
@@ -55,12 +71,17 @@ func CreateHash(args *cmd.HashCreateCmd) {
 			}
 		}
 
+		if args.Output == "" {
+			m.logger.Warn().Msg("output is not specified, use default name instead")
+		}
 		output := generic.TernaryAssign(args.Output == "", "checksum", args.Output)
 		// substitute file extension. for more information: https://go.dev/play/p/0wZcne8ZC8G
 		oPath := fmt.Sprintf("%s.%s", strings.TrimSuffix(output, filepath.Ext(output)), a)
 		err := filesystem.WriteLines(oPath, fContents)
-		if err != nil {
-			fmt.Printf("Failed to write to '%s'. %v", oPath, err)
+		if err == nil {
+			m.logger.Info().Msgf("Written %d line(s) to '%s'", len(fContents), oPath)
+		} else {
+			m.logger.Err(err).Msgf("Failed to write to '%s'", oPath)
 		}
 	}
 }
