@@ -34,19 +34,19 @@ func IsDirectoryExist(fPath string) bool {
 	return fileInfo.IsDir()
 }
 
-func listDirectory(dPath string) ([]*FsEntry, error) {
+func listDirectory(dPath string) (FsEntries, error) {
 	logger.Debug().Msgf("Listing directory '%s'", dPath)
 	entries, err := os.ReadDir(dPath)
 	if err != nil {
-		return []*FsEntry{}, err
+		return FsEntries{}, err
 	}
-	contents := make([]*FsEntry, len(entries))
+	contents := make(FsEntries, len(entries))
 	logger.Debug().Int("count", len(contents)).Msgf("Found %d item(s) for '%s'", len(contents), dPath)
 	for i, e := range entries {
 		relativePath := path.Join(dPath, e.Name())
 		absolutePath, err := filepath.Abs(relativePath)
 		if err != nil {
-			return []*FsEntry{}, err
+			return FsEntries{}, err
 		}
 		content := &FsEntry{
 			AbsolutePath: absolutePath,
@@ -59,8 +59,8 @@ func listDirectory(dPath string) ([]*FsEntry, error) {
 	return contents, nil
 }
 
-func listEntries(entires []*FsEntry, maxDepth int, depth int) ([]*FsEntry, error) {
-	contents := []*FsEntry{}
+func listEntries(entires []*FsEntry, maxDepth int, depth int) (FsEntries, error) {
+	contents := FsEntries{}
 	for _, e := range entires {
 		logger.Debug().Int("depth", depth).Int("maxDepth", maxDepth).Str("absPath", e.RelativePath).Msgf("Listing entries for '%s'", e.RelativePath)
 		contents = append(contents, e)
@@ -69,11 +69,11 @@ func listEntries(entires []*FsEntry, maxDepth int, depth int) ([]*FsEntry, error
 		}
 		subEntries, err := listDirectory(e.RelativePath)
 		if err != nil {
-			return []*FsEntry{}, err
+			return FsEntries{}, err
 		}
 		subContents, err := listEntries(subEntries, maxDepth, depth+1)
 		if err != nil {
-			return []*FsEntry{}, err
+			return FsEntries{}, err
 		}
 		contents = append(contents, subContents...)
 	}

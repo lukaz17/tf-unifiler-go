@@ -86,7 +86,7 @@ func Hash(fPath string, algorithms []string) ([]*HashResult, error) {
 			}
 			break
 		}
-		logger.Info().Array("algos", extension.ZerolifyStrings(algorithms)).Str("file", fPath).Int("size", int(written)).Msgf("Hashed '%s' (%d bytes)", fPath, written)
+		logger.Info().Array("algos", extension.StringSlice(algorithms)).Str("file", fPath).Int("size", int(written)).Msgf("Hashed '%s' (%d bytes)", fPath, written)
 	}
 	if err != nil {
 		return []*HashResult{}, err

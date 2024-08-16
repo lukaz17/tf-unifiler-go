@@ -15,6 +15,24 @@ type FsEntry struct {
 	IsDir        bool
 }
 
+type FsEntries []*FsEntry
+
+func (entries FsEntries) GetPaths() []string {
+	fPaths := make([]string, len(entries))
+	for i, e := range entries {
+		fPaths[i] = e.RelativePath
+	}
+	return fPaths
+}
+
+func (entries FsEntries) GetAbsPaths() []string {
+	fPaths := make([]string, len(entries))
+	for i, e := range entries {
+		fPaths[i] = e.AbsolutePath
+	}
+	return fPaths
+}
+
 func CreateEntry(fPath string) (*FsEntry, error) {
 	absolutePath, err := filepath.Abs(fPath)
 	if err != nil {
@@ -62,28 +80,12 @@ func IsFileExist(fPath string) bool {
 	return !fileInfo.IsDir()
 }
 
-func GetPaths(entries []*FsEntry) []string {
-	fPaths := make([]string, len(entries))
-	for i, e := range entries {
-		fPaths[i] = e.RelativePath
-	}
-	return fPaths
-}
-
-func GetAbsPaths(entries []*FsEntry) []string {
-	fPaths := make([]string, len(entries))
-	for i, e := range entries {
-		fPaths[i] = e.AbsolutePath
-	}
-	return fPaths
-}
-
-func List(fPaths []string, recursive bool) ([]*FsEntry, error) {
+func List(fPaths []string, recursive bool) (FsEntries, error) {
 	contents := make([]*FsEntry, len(fPaths))
 	for i, p := range fPaths {
 		entry, err := CreateEntry(p)
 		if err != nil {
-			return []*FsEntry{}, err
+			return FsEntries{}, err
 		}
 		contents[i] = entry
 	}
@@ -92,7 +94,7 @@ func List(fPaths []string, recursive bool) ([]*FsEntry, error) {
 		var err error
 		contents, err = listEntries(contents, maxDepth, 0)
 		if err != nil {
-			return []*FsEntry{}, err
+			return FsEntries{}, err
 		}
 	}
 	return contents, nil

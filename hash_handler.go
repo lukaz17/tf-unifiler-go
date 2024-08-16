@@ -36,8 +36,8 @@ func (m *HashModule) CreateHash(args *cmd.HashCreateCmd) {
 		return
 	}
 	m.logger.Info().
-		Array("algos", extension.ZerolifyStrings(args.Algorithms)).
-		Array("files", extension.ZerolifyStrings(args.Files)).
+		Array("algos", extension.StringSlice(args.Algorithms)).
+		Array("files", extension.StringSlice(args.Files)).
 		Str("output", args.Output).
 		Msgf("Start computing hash")
 
