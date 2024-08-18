@@ -9,6 +9,10 @@ func CreateDirectory(dPath string) error {
 	return os.Mkdir(dPath, 0755)
 }
 
+func CreateDirectoryRecursive(dPath string) error {
+	return os.MkdirAll(dPath, 0755)
+}
+
 func IsDirectory(dPath string) (bool, error) {
 	fileInfo, err := os.Lstat(dPath)
 	if err != nil {

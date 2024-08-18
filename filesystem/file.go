@@ -3,7 +3,9 @@ package filesystem
 import (
 	"bufio"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
@@ -53,9 +55,18 @@ func CreateEntry(fPath string) (*FsEntry, error) {
 }
 
 func CreateHardlink(sPath, tPath string) error {
+	ntPath := NormalizePath(tPath)
+	parent, _ := path.Split(ntPath)
+	if !IsExist(parent) {
+		err := os.MkdirAll(parent, 0775)
+		logger.Debug().Str("dir", parent).Str("target", tPath).Msgf("Created parent directory '%s'", parent)
+		if err != nil {
+			return err
+		}
+	}
 	err := os.Link(sPath, tPath)
 	if err == nil {
-		logger.Debug().Str("src", sPath).Str("target", tPath).Msgf("Create link for '%s'", sPath)
+		logger.Debug().Str("src", sPath).Str("target", tPath).Msgf("Created link for '%s'", sPath)
 	}
 	return err
 }
@@ -63,9 +74,19 @@ func CreateHardlink(sPath, tPath string) error {
 func GetAbsPath(fPath string) (string, error) {
 	absolutePath, err := filepath.Abs(fPath)
 	if err == nil {
-		absolutePath = strings.ReplaceAll(absolutePath, "\\", "/") // enfore linux path style for clarity
+		absolutePath = NormalizePath(absolutePath)
 	}
 	return absolutePath, err
+}
+
+func IsAbsPath(fPath string) bool {
+	if strings.HasPrefix(fPath, "/") {
+		return true
+	}
+	if isAbs, _ := regexp.MatchString(fPath, "^[a-zA-Z]:[\\/]"); isAbs {
+		return true
+	}
+	return false
 }
 
 func IsExist(fPath string) bool {
@@ -115,6 +136,11 @@ func List(fPaths []string, recursive bool) (FsEntries, error) {
 		}
 	}
 	return contents, nil
+}
+
+func NormalizePath(fPath string) string {
+	newPath := strings.ReplaceAll(fPath, "\\", "/") // enfore linux path style for clarity
+	return newPath
 }
 
 func WriteLines(fPath string, lines []string) error {
