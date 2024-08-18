@@ -30,8 +30,14 @@ func main() {
 
 	if invokeArgs.Hash != nil {
 		m := HashModule{
-			logger: log.Logger.With().Str("module", "hash").Logger(),
+			logger: diag.GetModuleLogger("hash"),
 		}
 		m.Hash(invokeArgs.Hash)
+	}
+	if invokeArgs.Mirror != nil {
+		m := MirrorModule{
+			logger: diag.GetModuleLogger("mirror"),
+		}
+		m.Mirror(invokeArgs.Mirror)
 	}
 }

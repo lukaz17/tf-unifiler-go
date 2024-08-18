@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 )
@@ -34,7 +35,7 @@ func (entries FsEntries) GetAbsPaths() []string {
 }
 
 func CreateEntry(fPath string) (*FsEntry, error) {
-	absolutePath, err := filepath.Abs(fPath)
+	absolutePath, err := GetAbsPath(fPath)
 	if err != nil {
 		return nil, err
 	}
@@ -49,6 +50,22 @@ func CreateEntry(fPath string) (*FsEntry, error) {
 		IsDir:        fileInfo.IsDir(),
 	}
 	return entry, nil
+}
+
+func CreateHardlink(sPath, tPath string) error {
+	err := os.Link(sPath, tPath)
+	if err == nil {
+		logger.Debug().Str("src", sPath).Str("target", tPath).Msgf("Create link for '%s'", sPath)
+	}
+	return err
+}
+
+func GetAbsPath(fPath string) (string, error) {
+	absolutePath, err := filepath.Abs(fPath)
+	if err == nil {
+		absolutePath = strings.ReplaceAll(absolutePath, "\\", "/") // enfore linux path style for clarity
+	}
+	return absolutePath, err
 }
 
 func IsExist(fPath string) bool {

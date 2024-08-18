@@ -3,7 +3,6 @@ package filesystem
 import (
 	"os"
 	"path"
-	"path/filepath"
 )
 
 func CreateDirectory(dPath string) error {
@@ -44,7 +43,7 @@ func listDirectory(dPath string) (FsEntries, error) {
 	logger.Debug().Int("count", len(contents)).Msgf("Found %d item(s) for '%s'", len(contents), dPath)
 	for i, e := range entries {
 		relativePath := path.Join(dPath, e.Name())
-		absolutePath, err := filepath.Abs(relativePath)
+		absolutePath, err := GetAbsPath(relativePath)
 		if err != nil {
 			return FsEntries{}, err
 		}
