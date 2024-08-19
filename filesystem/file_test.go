@@ -15,7 +15,7 @@ func TestList(t *testing.T) {
 	}{
 		{"files only", []string{"file.go"}, []string{"file.go"}},
 		{"directories only", []string{"../cmd"}, []string{"../cmd", "../cmd/args.go"}},
-		{"file and directories", []string{".", "file.go"}, []string{".", "directory.go", "directory_test.go", "file.go", "file_test.go", "file.go"}},
+		{"file and directories", []string{".", "file.go"}, []string{".", "directory.go", "directory_test.go", "file.go", "file_test.go", "logger.go", "file.go"}},
 		{"two dots", []string{"../.tests"}, []string{
 			"../.tests", "../.tests/basic", "../.tests/basic/1-helloworld.md",
 			"../.tests/module", "../.tests/module/fmt", "../.tests/module/fmt/1-printf.md", "../.tests/module/fmt/2-errorf.md",
@@ -26,7 +26,7 @@ func TestList(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			contents, err := List(tt.files, true)
-			fPaths := GetPaths(contents)
+			fPaths := contents.GetPaths()
 			if !reflect.DeepEqual(fPaths, tt.results) {
 				t.Error(err)
 				t.Errorf("Wrong file listing. Expected '%s' Actual '%s'", tt.results, fPaths)

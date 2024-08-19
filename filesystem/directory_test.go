@@ -44,7 +44,7 @@ func TestListEntires(t *testing.T) {
 				entries[i], _ = CreateEntry(f)
 			}
 			contents, err := listEntries(entries, tt.maxDepth, 0)
-			fPaths := GetPaths(contents)
+			fPaths := contents.GetPaths()
 			if !reflect.DeepEqual(fPaths, tt.results) {
 				t.Error(err)
 				t.Errorf("Wrong file listing. Expected '%s' Actual '%s'", tt.results, fPaths)

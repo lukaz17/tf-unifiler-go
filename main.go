@@ -12,6 +12,7 @@ import (
 )
 
 var invokeArgs cmd.Args
+var version = "v0.1.0"
 
 func main() {
 	logFile := diag.InitZerolog()
@@ -24,12 +25,19 @@ func main() {
 	invokeArgs = cmd.Args{}
 	arg.MustParse(&invokeArgs)
 	pwd, _ := os.Getwd()
+	log.Info().Msgf("TF UNIFILER %s", version)
 	log.Info().Msgf("Current directory %s", pwd)
 
 	if invokeArgs.Hash != nil {
 		m := HashModule{
-			logger: log.Logger.With().Str("module", "hash").Logger(),
+			logger: diag.GetModuleLogger("hash"),
 		}
 		m.Hash(invokeArgs.Hash)
+	}
+	if invokeArgs.Mirror != nil {
+		m := MirrorModule{
+			logger: diag.GetModuleLogger("mirror"),
+		}
+		m.Mirror(invokeArgs.Mirror)
 	}
 }

@@ -3,7 +3,10 @@ package filesystem
 import (
 	"bufio"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 )
@@ -15,8 +18,26 @@ type FsEntry struct {
 	IsDir        bool
 }
 
+type FsEntries []*FsEntry
+
+func (entries FsEntries) GetPaths() []string {
+	fPaths := make([]string, len(entries))
+	for i, e := range entries {
+		fPaths[i] = e.RelativePath
+	}
+	return fPaths
+}
+
+func (entries FsEntries) GetAbsPaths() []string {
+	fPaths := make([]string, len(entries))
+	for i, e := range entries {
+		fPaths[i] = e.AbsolutePath
+	}
+	return fPaths
+}
+
 func CreateEntry(fPath string) (*FsEntry, error) {
-	absolutePath, err := filepath.Abs(fPath)
+	absolutePath, err := GetAbsPath(fPath)
 	if err != nil {
 		return nil, err
 	}
@@ -31,6 +52,41 @@ func CreateEntry(fPath string) (*FsEntry, error) {
 		IsDir:        fileInfo.IsDir(),
 	}
 	return entry, nil
+}
+
+func CreateHardlink(sPath, tPath string) error {
+	ntPath := NormalizePath(tPath)
+	parent, _ := path.Split(ntPath)
+	if !IsExist(parent) {
+		err := os.MkdirAll(parent, 0775)
+		logger.Debug().Str("dir", parent).Str("target", tPath).Msgf("Created parent directory '%s'", parent)
+		if err != nil {
+			return err
+		}
+	}
+	err := os.Link(sPath, tPath)
+	if err == nil {
+		logger.Debug().Str("src", sPath).Str("target", tPath).Msgf("Created link for '%s'", sPath)
+	}
+	return err
+}
+
+func GetAbsPath(fPath string) (string, error) {
+	absolutePath, err := filepath.Abs(fPath)
+	if err == nil {
+		absolutePath = NormalizePath(absolutePath)
+	}
+	return absolutePath, err
+}
+
+func IsAbsPath(fPath string) bool {
+	if strings.HasPrefix(fPath, "/") {
+		return true
+	}
+	if isAbs, _ := regexp.MatchString(fPath, "^[a-zA-Z]:[\\/]"); isAbs {
+		return true
+	}
+	return false
 }
 
 func IsExist(fPath string) bool {
@@ -62,28 +118,12 @@ func IsFileExist(fPath string) bool {
 	return !fileInfo.IsDir()
 }
 
-func GetPaths(entries []*FsEntry) []string {
-	fPaths := make([]string, len(entries))
-	for i, e := range entries {
-		fPaths[i] = e.RelativePath
-	}
-	return fPaths
-}
-
-func GetAbsPaths(entries []*FsEntry) []string {
-	fPaths := make([]string, len(entries))
-	for i, e := range entries {
-		fPaths[i] = e.AbsolutePath
-	}
-	return fPaths
-}
-
-func List(fPaths []string, recursive bool) ([]*FsEntry, error) {
+func List(fPaths []string, recursive bool) (FsEntries, error) {
 	contents := make([]*FsEntry, len(fPaths))
 	for i, p := range fPaths {
 		entry, err := CreateEntry(p)
 		if err != nil {
-			return []*FsEntry{}, err
+			return FsEntries{}, err
 		}
 		contents[i] = entry
 	}
@@ -92,10 +132,15 @@ func List(fPaths []string, recursive bool) ([]*FsEntry, error) {
 		var err error
 		contents, err = listEntries(contents, maxDepth, 0)
 		if err != nil {
-			return []*FsEntry{}, err
+			return FsEntries{}, err
 		}
 	}
 	return contents, nil
+}
+
+func NormalizePath(fPath string) string {
+	newPath := strings.ReplaceAll(fPath, "\\", "/") // enfore linux path style for clarity
+	return newPath
 }
 
 func WriteLines(fPath string, lines []string) error {

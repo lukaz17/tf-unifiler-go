@@ -53,7 +53,7 @@ func Hash(fPath string, algorithms []string) ([]*HashResult, error) {
 		}
 	}
 
-	bufSize := GetBufferSize(fHandle)
+	bufSize := getBufferSize(fHandle)
 	buf := make([]byte, bufSize)
 	written := int64(0)
 	for {
@@ -86,7 +86,6 @@ func Hash(fPath string, algorithms []string) ([]*HashResult, error) {
 			}
 			break
 		}
-		logger.Info().Array("algos", extension.ZerolifyStrings(algorithms)).Str("file", fPath).Int("size", int(written)).Msgf("Hashed '%s' (%d bytes)", fPath, written)
 	}
 	if err != nil {
 		return []*HashResult{}, err
@@ -95,10 +94,11 @@ func Hash(fPath string, algorithms []string) ([]*HashResult, error) {
 	for i, h := range hashers {
 		results[i].Hash = h.Sum(nil)
 	}
+	logger.Info().Array("algos", extension.StringSlice(algorithms)).Str("file", fPath).Int("size", int(written)).Msgf("Hashed '%s' (%d bytes)", fPath, written)
 	return results, nil
 }
 
-func GetBufferSize(src io.Reader) int {
+func getBufferSize(src io.Reader) int {
 	size := 32 * 1024
 	if l, ok := src.(*io.LimitedReader); ok && int64(size) > l.N {
 		if l.N < 1 {
@@ -108,4 +108,54 @@ func GetBufferSize(src io.Reader) int {
 		}
 	}
 	return size
+}
+
+func hashFile(fPath string, hasher hash.Hash, algo string) (*HashResult, error) {
+	fHandle, err := os.Open(fPath)
+	if err != nil {
+		return nil, err
+	}
+	defer fHandle.Close()
+
+	bufSize := getBufferSize(fHandle)
+	buf := make([]byte, bufSize)
+	written := int64(0)
+	for {
+		nread, eread := fHandle.Read(buf)
+		if nread > 0 {
+			nwrite, ewrite := hasher.Write(buf[0:nread])
+			if nwrite < 0 || nread < nwrite {
+				nwrite = 0
+				if ewrite == nil {
+					ewrite = errors.New("cannot write to hasher")
+				}
+			}
+			written += int64(nwrite)
+			if ewrite != nil {
+				err = ewrite
+				break
+			}
+			if nread != nwrite {
+				err = fmt.Errorf("read and write data mismatch %d %d", nread, nwrite)
+				break
+			}
+		}
+		if eread != nil {
+			if eread != io.EOF {
+				err = eread
+			}
+			break
+		}
+	}
+	if err != nil {
+		return nil, err
+	}
+
+	result := &HashResult{
+		Path:      fPath,
+		Algorithm: algo,
+		Hash:      hasher.Sum(nil),
+	}
+	logger.Info().Str("algo", algo).Str("file", fPath).Hex("hash", result.Hash).Int("size", int(written)).Msgf("Hashed '%s' (%d bytes)", fPath, written)
+	return result, nil
 }

@@ -2,63 +2,64 @@ package extension
 
 import "github.com/rs/zerolog"
 
-func ZerolifyBytes(bb []byte) *zerolog.Array {
-	arr := zerolog.Arr().Bytes(bb)
-	return arr
+type Bytes []byte
+
+func (slice Bytes) MarshalZerologArray(arr *zerolog.Array) {
+	arr.Bytes(slice)
 }
 
-func ZerolifyInts(ii []int) *zerolog.Array {
-	arr := zerolog.Arr()
-	for _, i := range ii {
+type IntSlice []int
+
+func (slice IntSlice) MarshalZerologArray(arr *zerolog.Array) {
+	for _, i := range slice {
 		arr.Int(i)
 	}
-	return arr
 }
 
-func ZerolifyInt32s(ii []int32) *zerolog.Array {
-	arr := zerolog.Arr()
-	for _, i := range ii {
+type Int32Slice []int32
+
+func (slice Int32Slice) MarshalZerologArray(arr *zerolog.Array) {
+	for _, i := range slice {
 		arr.Int32(i)
 	}
-	return arr
 }
 
-func ZerolifyInt64s(ii []int64) *zerolog.Array {
-	arr := zerolog.Arr()
-	for _, i := range ii {
+type Int64Slice []int64
+
+func (slice Int64Slice) MarshalZerologArray(arr *zerolog.Array) {
+	for _, i := range slice {
 		arr.Int64(i)
 	}
-	return arr
 }
 
-func ZerolifyUints(uu []uint) *zerolog.Array {
-	arr := zerolog.Arr()
-	for _, u := range uu {
-		arr.Uint(u)
+type StringSlice []string
+
+func (slice StringSlice) MarshalZerologArray(arr *zerolog.Array) {
+	for _, i := range slice {
+		arr.Str(i)
 	}
-	return arr
 }
 
-func ZerolifyUint32s(uu []uint32) *zerolog.Array {
-	arr := zerolog.Arr()
-	for _, u := range uu {
-		arr.Uint32(u)
+type UintSlice []uint
+
+func (slice UintSlice) MarshalZerologArray(arr *zerolog.Array) {
+	for _, i := range slice {
+		arr.Uint(i)
 	}
-	return arr
 }
 
-func ZerolifyUint64s(uu []uint64) *zerolog.Array {
-	arr := zerolog.Arr()
-	for _, u := range uu {
-		arr.Uint64(u)
+type Uint32Slice []uint32
+
+func (slice Uint32Slice) MarshalZerologArray(arr *zerolog.Array) {
+	for _, i := range slice {
+		arr.Uint32(i)
 	}
-	return arr
 }
 
-func ZerolifyStrings(ss []string) *zerolog.Array {
-	arr := zerolog.Arr()
-	for _, s := range ss {
-		arr.Str(s)
+type Uint64Slice []uint64
+
+func (slice Uint64Slice) MarshalZerologArray(arr *zerolog.Array) {
+	for _, i := range slice {
+		arr.Uint64(i)
 	}
-	return arr
 }
