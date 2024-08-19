@@ -17,10 +17,17 @@ type HashCreateCmd struct {
 
 type MirrorCmd struct {
 	Export *MirrorExportCmd `arg:"subcommand:export" help:"Generates file structure using cached files and checksum file"`
+	Import *MirrorImportCmd `arg:"subcommand:import" help:"Import to cache directory using pre computed checksum file"`
 	Scan   *MirrorScanCmd   `arg:"subcommand:scan" help:"Scan files and/or directories and create hardlink to cache directory"`
 }
 
 type MirrorExportCmd struct {
+	Cache      string `arg:"-c,--cache" help:"Directory to store the cached files. Must be in the same physical partition as files for hardlinks to work"`
+	Checksum   string `arg:"-f,--file" help:"Checksum file contains the file structures for export"`
+	TargetRoot string `arg:"-r,--root" htlp:"Target root directory that will contains the file structure"`
+}
+
+type MirrorImportCmd struct {
 	Cache      string `arg:"-c,--cache" help:"Directory to store the cached files. Must be in the same physical partition as files for hardlinks to work"`
 	Checksum   string `arg:"-f,--file" help:"Checksum file contains the file structures for export"`
 	TargetRoot string `arg:"-r,--root" htlp:"Target root directory that will contains the file structure"`
