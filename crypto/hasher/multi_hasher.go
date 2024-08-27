@@ -4,17 +4,20 @@ import (
 	"crypto/md5"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/sha512"
 	"errors"
 	"fmt"
 	"hash"
 	"io"
 	"os"
 
-	"github.com/tforceaio/tf-unifiler-go/extension"
+	"golang.org/x/crypto/md4"
+	"golang.org/x/crypto/ripemd160"
 )
 
 type HashResult struct {
 	Path      string
+	Size      int
 	Algorithm string
 	Hash      []byte
 }
@@ -29,25 +32,27 @@ func Hash(fPath string, algorithms []string) ([]*HashResult, error) {
 	results := make([]*HashResult, len(algorithms))
 	hashers := make([]hash.Hash, len(algorithms))
 	for i, a := range algorithms {
+		results[i] = &HashResult{
+			Path:      fPath,
+			Algorithm: a,
+		}
 		switch a {
+		case "md4":
+			hashers[i] = md4.New()
 		case "md5":
-			results[i] = &HashResult{
-				Path:      fPath,
-				Algorithm: "md5",
-			}
 			hashers[i] = md5.New()
+		case "ripemd160":
+			hashers[i] = ripemd160.New()
 		case "sha1":
-			results[i] = &HashResult{
-				Path:      fPath,
-				Algorithm: "sha1",
-			}
 			hashers[i] = sha1.New()
+		case "sha224":
+			hashers[i] = sha256.New224()
 		case "sha256":
-			results[i] = &HashResult{
-				Path:      fPath,
-				Algorithm: "sha256",
-			}
 			hashers[i] = sha256.New()
+		case "sha384":
+			hashers[i] = sha512.New384()
+		case "sha512":
+			hashers[i] = sha512.New()
 		default:
 			return []*HashResult{}, fmt.Errorf("unsupported hash algorithm: '%s'", a)
 		}
@@ -92,9 +97,9 @@ func Hash(fPath string, algorithms []string) ([]*HashResult, error) {
 	}
 
 	for i, h := range hashers {
+		results[i].Size = int(written)
 		results[i].Hash = h.Sum(nil)
 	}
-	logger.Info().Array("algos", extension.StringSlice(algorithms)).Str("file", fPath).Int("size", int(written)).Msgf("Hashed '%s' (%d bytes)", fPath, written)
 	return results, nil
 }
 
@@ -153,9 +158,9 @@ func hashFile(fPath string, hasher hash.Hash, algo string) (*HashResult, error) 
 
 	result := &HashResult{
 		Path:      fPath,
+		Size:      int(written),
 		Algorithm: algo,
 		Hash:      hasher.Sum(nil),
 	}
-	logger.Info().Str("algo", algo).Str("file", fPath).Hex("hash", result.Hash).Int("size", int(written)).Msgf("Hashed '%s' (%d bytes)", fPath, written)
 	return result, nil
 }

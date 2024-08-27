@@ -10,7 +10,7 @@ type HashCmd struct {
 }
 
 type HashCreateCmd struct {
-	Algorithms []string `arg:"-a,--algo" help:"Hash algorithms to use, multiple supported. Valid algorithms: md5, sha1, sha256"`
+	Algorithms []string `arg:"-a,--algo" help:"Hash algorithms to use, multiple supported. Valid algorithms: md4, md5, ripemd160, sha1, sha224, sha256, sha384, sha512"`
 	Files      []string `arg:"-f,--file" help:"Files and/or directories to compute hashes"`
 	Output     string   `arg:"-o,--out" help:"File or directory to store the result"`
 }

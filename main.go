@@ -6,7 +6,6 @@ import (
 	"github.com/alexflint/go-arg"
 	"github.com/rs/zerolog/log"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
-	"github.com/tforceaio/tf-unifiler-go/crypto/hasher"
 	"github.com/tforceaio/tf-unifiler-go/diag"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 )
@@ -20,7 +19,6 @@ func main() {
 		defer logFile.Close()
 	}
 	filesystem.SetLogger(diag.GetModuleLogger("filesystem"))
-	hasher.SetLogger(diag.GetModuleLogger("crypto/hasher"))
 
 	invokeArgs = cmd.Args{}
 	arg.MustParse(&invokeArgs)

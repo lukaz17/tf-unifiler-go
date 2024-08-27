@@ -54,6 +54,7 @@ func (m *HashModule) CreateHash(args *cmd.HashCreateCmd) {
 			continue
 		}
 		fhResults, err := hasher.Hash(c.RelativePath, args.Algorithms)
+		m.logger.Info().Array("algos", extension.StringSlice(args.Algorithms)).Int("size", fhResults[0].Size).Msgf("File hashed '%s'", c.RelativePath)
 		if err != nil {
 			m.logger.Err(err).Msgf("Error computing hash for '%s'", c.RelativePath)
 			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
@@ -82,6 +83,7 @@ func (m *HashModule) CreateHash(args *cmd.HashCreateCmd) {
 			m.logger.Info().Msgf("Written %d line(s) to '%s'", len(fContents), oPath)
 		} else {
 			m.logger.Err(err).Msgf("Failed to write to '%s'", oPath)
+			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
 		}
 	}
 }
