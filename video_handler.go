@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math"
 	"math/big"
 	"path"
 	"strconv"
@@ -79,7 +80,7 @@ func (m *VideoModule) VideoScreenshot(args *cmd.VideoScreenshotCmd) {
 		m.logger.Warn().Msg("Interval is not set, default value will be used")
 	}
 	if args.Quality == 0 {
-		m.logger.Warn().Msg("Interval is not set, default value will be used")
+		m.logger.Warn().Msg("Quality is not set, default value will be used")
 	}
 	m.logger.Info().
 		Str("file", args.File).
@@ -99,13 +100,14 @@ func (m *VideoModule) VideoScreenshot(args *cmd.VideoScreenshotCmd) {
 	}
 	fileMI, _ := exec.DecodeMediaInfoJson(stdout)
 
-	durationF, err := strconv.ParseFloat(fileMI.Media.GeneralTracks[0].Duration, 64)
+	duration, err := strconv.ParseFloat(fileMI.Media.GeneralTracks[0].Duration, 64)
 	if err != nil {
 		m.logger.Err(err).Msg("Invalid video file duration")
 		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
 		return
 	}
-	durationMs := big.NewInt(int64(durationF * float64(1000)))
+	limit := generic.TernaryAssign(args.Limit == 0, duration, math.Min(duration, args.Limit))
+	limitMs := big.NewInt(int64(limit * float64(1000)))
 
 	outputRoot := generic.TernaryAssign(args.Output == "", path.Dir(inputFile.AbsolutePath), args.Output)
 	if !filesystem.IsDirectoryExist(outputRoot) {
@@ -117,12 +119,12 @@ func (m *VideoModule) VideoScreenshot(args *cmd.VideoScreenshotCmd) {
 		}
 	}
 
-	offsetDef, intervalDef := m.DefaultScreenshotParameter(durationMs)
+	offsetDef, intervalDef := m.DefaultScreenshotParameter(limitMs)
 	offset := generic.TernaryAssign(args.Offset == 0, offsetDef, big.NewInt(int64(args.Offset*1000)))
 	interval := generic.TernaryAssign(args.Interval == 0, intervalDef, big.NewInt(int64(args.Interval*1000)))
 	quality := generic.TernaryAssign(args.Quality == 0, 1, args.Quality)
 	outputFilenameFormat := generic.TernaryAssign(quality == 1, path.Join(outputRoot, inputFile.Name+"_%s"+".jpg"), path.Join(outputRoot, inputFile.Name+"_%s_q%d"+".jpg"))
-	for t := offset; t.Cmp(durationMs) < 0; t = new(big.Int).Add(t, interval) {
+	for t := offset; t.Cmp(limitMs) < 0; t = new(big.Int).Add(t, interval) {
 		outFile := generic.TernaryAssign(quality == 1, fmt.Sprintf(outputFilenameFormat, m.ConvertSecondToTimeCode(t)), fmt.Sprintf(outputFilenameFormat, m.ConvertSecondToTimeCode(t), quality))
 		ffmOptions := &exec.FFmpegArgsOptions{
 			InputFile:      inputFile.AbsolutePath,

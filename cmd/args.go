@@ -51,8 +51,9 @@ type VideoInfoCmd struct {
 
 type VideoScreenshotCmd struct {
 	File     string  `arg:"-f, --file" help:"Video file to generate info"`
-	Interval float64 `arg:"-i, --interval" help:"Time in the seconds every subsequence screenshot will take"`
-	Offset   float64 `arg:"-s, --offset" help:"Time in the seconds the first screenshot will take"`
+	Interval float64 `arg:"-i, --interval" help:"Time in the second every subsequence screenshot will take"`
+	Offset   float64 `arg:"-s, --offset" help:"Time in the second the first screenshot will take"`
+	Limit    float64 `arg:"-l, --limit" help:"Time in the second the last screenshot will take"`
 	Quality  int     `arg:"-q, --quality" help:"Quality factor for output screenshots"`
 	Output   string  `arg:"-o, --out" help:"Directory to store the screenshots"`
 }
