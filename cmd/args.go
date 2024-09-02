@@ -40,10 +40,19 @@ type MirrorScanCmd struct {
 }
 
 type VideoCmd struct {
-	Info *VideoInfoCmd `arg:"subcommand:info" help:"Analyze video info using MediaInfo"`
+	Info       *VideoInfoCmd       `arg:"subcommand:info" help:"Analyze video info using MediaInfo"`
+	Screenshot *VideoScreenshotCmd `arg:"subcommand:screenshot" help:"Create screenshots for the video to overview of the content"`
 }
 
 type VideoInfoCmd struct {
 	File   string `arg:"-f, --file" help:"Video file to generate info"`
 	Output string `arg:"-o, --out" help:"File to store the info report"`
+}
+
+type VideoScreenshotCmd struct {
+	File     string  `arg:"-f, --file" help:"Video file to generate info"`
+	Interval float64 `arg:"-i, --interval" help:"Time in the seconds every subsequence screenshot will take"`
+	Offset   float64 `arg:"-s, --offset" help:"Time in the seconds the first screenshot will take"`
+	Quality  int     `arg:"-q, --quality" help:"Quality factor for output screenshots"`
+	Output   string  `arg:"-o, --out" help:"Directory to store the screenshots"`
 }
