@@ -3,6 +3,7 @@ package cmd
 type Args struct {
 	Hash   *HashCmd   `arg:"subcommand:hash" help:"Compute or verify checksum"`
 	Mirror *MirrorCmd `arg:"subcommand:mirror" help:"Create links for files and directories to save disk space for similar files"`
+	Video  *VideoCmd  `arg:"subcommand:video" help:"Special operations related to video"`
 }
 
 type HashCmd struct {
@@ -36,4 +37,13 @@ type MirrorImportCmd struct {
 type MirrorScanCmd struct {
 	Cache string   `arg:"-c,--cache" help:"Directory to store the cached files. Must be in the same physical partition as files for hardlinks to work"`
 	Files []string `arg:"-f,--file" help:"Files and/or directories to import to cache"`
+}
+
+type VideoCmd struct {
+	Info *VideoInfoCmd `arg:"subcommand:info" help:"Analyze video info using MediaInfo"`
+}
+
+type VideoInfoCmd struct {
+	File   string `arg:"-f, --file" help:"Video file to generate info"`
+	Output string `arg:"-o, --out" help:"File to store the info report"`
 }

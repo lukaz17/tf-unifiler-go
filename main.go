@@ -8,6 +8,7 @@ import (
 	"github.com/tforceaio/tf-unifiler-go/cmd"
 	"github.com/tforceaio/tf-unifiler-go/diag"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
+	"github.com/tforceaio/tf-unifiler-go/filesystem/exec"
 )
 
 var invokeArgs cmd.Args
@@ -19,6 +20,7 @@ func main() {
 		defer logFile.Close()
 	}
 	filesystem.SetLogger(diag.GetModuleLogger("filesystem"))
+	exec.SetLogger(diag.GetModuleLogger("exec"))
 
 	invokeArgs = cmd.Args{}
 	arg.MustParse(&invokeArgs)
@@ -37,5 +39,11 @@ func main() {
 			logger: diag.GetModuleLogger("mirror"),
 		}
 		m.Mirror(invokeArgs.Mirror)
+	}
+	if invokeArgs.Video != nil {
+		m := VideoModule{
+			logger: diag.GetModuleLogger("video"),
+		}
+		m.Video(invokeArgs.Video)
 	}
 }
