@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"math/big"
 	"path"
 	"strconv"
 
@@ -98,12 +99,13 @@ func (m *VideoModule) VideoScreenshot(args *cmd.VideoScreenshotCmd) {
 	}
 	fileMI, _ := exec.DecodeMediaInfoJson(stdout)
 
-	duration, err := strconv.ParseFloat(fileMI.Media.GeneralTracks[0].Duration, 64)
+	durationF, err := strconv.ParseFloat(fileMI.Media.GeneralTracks[0].Duration, 64)
 	if err != nil {
 		m.logger.Err(err).Msg("Invalid video file duration")
 		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
 		return
 	}
+	durationMs := big.NewInt(int64(durationF * float64(1000)))
 
 	outputRoot := generic.TernaryAssign(args.Output == "", path.Dir(inputFile.AbsolutePath), args.Output)
 	if !filesystem.IsDirectoryExist(outputRoot) {
@@ -114,17 +116,17 @@ func (m *VideoModule) VideoScreenshot(args *cmd.VideoScreenshotCmd) {
 			return
 		}
 	}
-	outputFilenameFormat := path.Join(outputRoot, inputFile.Name+"_%s"+".jpg")
 
-	offsetDef, intervalDef := m.DefaultScreenshotParameter(duration)
-	offset := generic.TernaryAssign(args.Offset == 0, offsetDef, args.Offset)
-	interval := generic.TernaryAssign(args.Interval == 0, intervalDef, args.Interval)
+	offsetDef, intervalDef := m.DefaultScreenshotParameter(durationMs)
+	offset := generic.TernaryAssign(args.Offset == 0, offsetDef, big.NewInt(int64(args.Offset*1000)))
+	interval := generic.TernaryAssign(args.Interval == 0, intervalDef, big.NewInt(int64(args.Interval*1000)))
 	quality := generic.TernaryAssign(args.Quality == 0, 1, args.Quality)
-	for t := offset; t < duration; t = t + interval {
-		outFile := fmt.Sprintf(outputFilenameFormat, m.ConvertSecondToTimeCode(t))
+	outputFilenameFormat := generic.TernaryAssign(quality == 1, path.Join(outputRoot, inputFile.Name+"_%s"+".jpg"), path.Join(outputRoot, inputFile.Name+"_%s_q%d"+".jpg"))
+	for t := offset; t.Cmp(durationMs) < 0; t = new(big.Int).Add(t, interval) {
+		outFile := generic.TernaryAssign(quality == 1, fmt.Sprintf(outputFilenameFormat, m.ConvertSecondToTimeCode(t)), fmt.Sprintf(outputFilenameFormat, m.ConvertSecondToTimeCode(t), quality))
 		ffmOptions := &exec.FFmpegArgsOptions{
 			InputFile:      inputFile.AbsolutePath,
-			InputStartTime: nullable.FromInt(int(t)),
+			InputStartTime: nullable.FromInt(int(t.Int64()) / 1000),
 
 			OutputFile:       outFile,
 			OutputFrameCount: nullable.FromInt(1),
@@ -137,38 +139,37 @@ func (m *VideoModule) VideoScreenshot(args *cmd.VideoScreenshotCmd) {
 			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
 			return
 		}
-		log.Info().Float64("time", t).Str("output", outFile).Msg("Created screenshot successfully")
+		log.Info().Float64("time", float64(t.Int64())/float64(1000)).Str("output", outFile).Msg("Created screenshot successfully")
 	}
 }
 
-func (mod *VideoModule) ConvertSecondToTimeCode(sec float64) string {
-	msec := int64(sec * 1000)
-	h := msec / int64(3600000)
-	msec = msec % int64(3600000)
-	m := msec / int64(60000)
-	msec = msec % int64(60000)
-	s := msec / int64(1000)
-	ms := msec % int64(1000)
+func (mod *VideoModule) ConvertSecondToTimeCode(msec *big.Int) string {
+	h := new(big.Int).Div(msec, big.NewInt(3600000))
+	msec = new(big.Int).Mod(msec, big.NewInt(3600000))
+	m := new(big.Int).Div(msec, big.NewInt(60000))
+	msec = new(big.Int).Mod(msec, big.NewInt(60000))
+	s := new(big.Int).Div(msec, big.NewInt(1000))
+	ms := new(big.Int).Mod(msec, big.NewInt(1000))
 
-	return fmt.Sprintf("%d_%02d_%02d_%03d", h, m, s, ms)
+	return fmt.Sprintf("%d_%02d_%02d_%03d", h.Int64(), m.Int64(), s.Int64(), ms.Int64())
 }
 
-func (mod *VideoModule) DefaultScreenshotParameter(sec float64) (float64, float64) {
+func (mod *VideoModule) DefaultScreenshotParameter(msec *big.Int) (*big.Int, *big.Int) {
 	defaults := []struct {
-		duration float64
-		offset   float64
-		interval float64
+		duration *big.Int
+		offset   *big.Int
+		interval *big.Int
 	}{
-		{120, 1, 2.5},      // 0 -> 47
-		{420, 1.3, 4.3},    // 27 -> 97
-		{1200, 1.7, 7.1},   // 59 -> 168
-		{3600, 2.3, 12.3},  // 97 -> 292
-		{10800, 2.7, 12.7}, // 283 -> 850
+		{big.NewInt(120), big.NewInt(1000), big.NewInt(2500)},       // 0 -> 47
+		{big.NewInt(420000), big.NewInt(1300), big.NewInt(4300)},    // 27 -> 97
+		{big.NewInt(1200000), big.NewInt(1700), big.NewInt(7100)},   // 59 -> 168
+		{big.NewInt(3600000), big.NewInt(2300), big.NewInt(12300)},  // 97 -> 292
+		{big.NewInt(10800000), big.NewInt(2700), big.NewInt(12700)}, // 283 -> 850
 	}
 	for _, d := range defaults {
-		if sec <= d.duration {
+		if msec.Cmp(d.duration) < 0 {
 			return d.offset, d.interval
 		}
 	}
-	return 3.4, 17.1 // 631 -> max
+	return big.NewInt(3400), big.NewInt(17100) // 631 -> max
 }
