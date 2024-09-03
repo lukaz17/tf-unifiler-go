@@ -119,6 +119,13 @@ func (m *VideoModule) VideoScreenshot(args *cmd.VideoScreenshotCmd) {
 		}
 	}
 
+	isHDR := fileMI.Media.VideoTracks[0].HDRFormat != ""
+	// Convert from BT2020 HDR to BT709 using ffmpeg
+	// Reference https://web.archive.org/web/20190722004804/https://stevens.li/guides/video/converting-hdr-to-sdr-with-ffmpeg/
+	vfHDR := "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
+	if isHDR {
+		m.logger.Info().Str("param", vfHDR).Msg("The video is HDR, Unifiler will attempt to apply colorspace conversion")
+	}
 	offsetDef, intervalDef := m.DefaultScreenshotParameter(limitMs)
 	offset := generic.TernaryAssign(args.Offset == 0, offsetDef, big.NewInt(int64(args.Offset*1000)))
 	interval := generic.TernaryAssign(args.Interval == 0, intervalDef, big.NewInt(int64(args.Interval*1000)))
@@ -135,6 +142,10 @@ func (m *VideoModule) VideoScreenshot(args *cmd.VideoScreenshotCmd) {
 			QualityFactor:    nullable.FromInt(quality),
 			OverwiteOutput:   true,
 		}
+		if isHDR {
+			ffmOptions.VideoFilter = vfHDR
+		}
+
 		_, err := exec.Run("ffmpeg", exec.NewFFmpegArgs(ffmOptions))
 		if err != nil {
 			m.logger.Err(err).Msg("Error taking video file screenshot")
