@@ -131,7 +131,7 @@ func (m *VideoModule) VideoScreenshot(args *cmd.VideoScreenshotCmd) {
 	interval := generic.TernaryAssign(args.Interval == 0, intervalDef, big.NewInt(int64(args.Interval*1000)))
 	quality := generic.TernaryAssign(args.Quality == 0, 1, args.Quality)
 	outputFilenameFormat := generic.TernaryAssign(quality == 1, path.Join(outputRoot, inputFile.Name+"_%s"+".jpg"), path.Join(outputRoot, inputFile.Name+"_%s_q%d"+".jpg"))
-	for t := offset; t.Cmp(limitMs) < 0; t = new(big.Int).Add(t, interval) {
+	for t := offset; t.Cmp(limitMs) <= 0; t = new(big.Int).Add(t, interval) {
 		outFile := generic.TernaryAssign(quality == 1, fmt.Sprintf(outputFilenameFormat, m.ConvertSecondToTimeCode(t)), fmt.Sprintf(outputFilenameFormat, m.ConvertSecondToTimeCode(t), quality))
 		ffmOptions := &exec.FFmpegArgsOptions{
 			InputFile:      inputFile.AbsolutePath,
