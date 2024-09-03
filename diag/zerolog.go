@@ -1,6 +1,7 @@
 package diag
 
 import (
+	"fmt"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,9 +14,13 @@ import (
 func InitZerolog() *os.File {
 	exec, _ := os.Executable()
 	exPath := filepath.Dir(exec)
-	logFile := path.Join(exPath, "unifiler.log")
+	date := time.Now().UTC().Format("20060102")
+	logFile := path.Join(exPath, fmt.Sprintf("unifiler-%s.log", date))
 
-	consoleWriter := zerolog.ConsoleWriter{Out: os.Stdout, NoColor: false, TimeFormat: time.DateTime}
+	consoleWriter := &zerolog.FilteredLevelWriter{
+		Writer: zerolog.LevelWriterAdapter{zerolog.ConsoleWriter{Out: os.Stdout, NoColor: false, TimeFormat: time.DateTime}},
+		Level:  zerolog.InfoLevel,
+	}
 	fileWriter, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
 	if err != nil {
 		log.Logger = zerolog.New(consoleWriter).With().Timestamp().Logger()
