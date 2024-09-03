@@ -23,7 +23,10 @@ var patchVersion = 0
 var gitCommit, gitDate, gitBranch string
 
 func version() string {
-	date := generic.TernaryAssign(gitDate == "", time.Now().UTC().Format("20060102"), gitDate)
+	originDate := time.Date(2024, time.August, 13, 0, 0, 0, 0, time.UTC)
+	gitDate2, _ := time.Parse("20060102", gitDate)
+	buildDate := generic.TernaryAssign(gitDate == "", time.Now().UTC(), gitDate2)
+	duration := buildDate.Sub(originDate)
 	minor := minorVersion
 	patch := strconv.Itoa(patchVersion)
 	if gitBranch == "master" {
@@ -38,9 +41,9 @@ func version() string {
 		patch = strconv.Itoa(patchVersion+1) + "-dev"
 	}
 	if gitCommit != "" {
-		return fmt.Sprintf("%d.%d.%s.%s-%s", majorVersion, minor, patch, date, gitCommit)
+		return fmt.Sprintf("%d.%d.%s.%d-%s", majorVersion, minor, patch, duration.Milliseconds()/int64(86400000), gitCommit)
 	}
-	return fmt.Sprintf("%d.%d.%s.%s", majorVersion, minor, patch, date)
+	return fmt.Sprintf("%d.%d.%s.%d", majorVersion, minor, patch, duration.Milliseconds()/int64(86400000))
 }
 
 func main() {
