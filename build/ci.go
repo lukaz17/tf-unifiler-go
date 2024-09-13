@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
@@ -15,8 +14,8 @@ import (
 
 var GOBIN, _ = filepath.Abs(".bin")
 
-func executablePath(name string) string {
-	if runtime.GOOS == "windows" {
+func executablePath(name string, os string) string {
+	if os == "windows" {
 		name += ".exe"
 	}
 	return filepath.Join(GOBIN, name)
@@ -34,15 +33,22 @@ func main() {
 
 func compile(cmdline []string) {
 	var (
+		os         = flag.String("os", "", "Architecture to cross build for")
 		arch       = flag.String("arch", "", "Architecture to cross build for")
 		cc         = flag.String("cc", "", "C compiler to cross build with")
 		staticlink = flag.Bool("static", false, "Create statically-linked executable")
 	)
 	flag.CommandLine.Parse(cmdline)
 	env := Env()
+	if *os != "" {
+		env.Platform = *os
+	}
+	if *arch != "" {
+		env.Architecture = *arch
+	}
 
 	// Configure the toolchain.
-	tc := GoToolchain{GOARCH: *arch, CC: *cc}
+	tc := GoToolchain{GOOS: env.Platform, GOARCH: env.Architecture, CC: *cc}
 	// Disable CLI markdown doc generation in release builds.
 	buildTags := []string{"urfave_cli_no_docs"}
 
@@ -56,7 +62,7 @@ func compile(cmdline []string) {
 	// arm64 CI builders are memory-constrained and can't handle concurrent builds,
 	// better disable it. This check isn't the best, it should probably
 	// check for something in env instead.
-	if runtime.GOARCH == "arm64" {
+	if env.Architecture == "arm64" {
 		gobuild.Args = append(gobuild.Args, "-p", "1")
 	}
 	// We use -trimpath to avoid leaking local paths into the built executables.
@@ -78,7 +84,7 @@ func compile(cmdline []string) {
 	for _, pkg := range packages {
 		args := make([]string, len(gobuild.Args))
 		copy(args, gobuild.Args)
-		args = append(args, "-o", executablePath(pkg.name))
+		args = append(args, "-o", executablePath(pkg.name, env.Platform))
 		args = append(args, pkg.class)
 		MustRun(&exec.Cmd{Path: gobuild.Path, Args: args, Env: gobuild.Env})
 	}
@@ -104,10 +110,10 @@ func buildFlags(env Environment, staticLinking bool, buildTags []string) (flags 
 	}
 	// Strip DWARF on darwin. This used to be required for certain things,
 	// and there is no downside to this, so we just keep doing it.
-	if runtime.GOOS == "darwin" {
+	if env.Platform == "darwin" {
 		ld = append(ld, "-s")
 	}
-	if runtime.GOOS == "linux" {
+	if env.Platform == "linux" {
 		// Enforce the stacksize to 8M, which is the case on most platforms apart from
 		// alpine Linux.
 		// See https://sourceware.org/binutils/docs-2.23.1/ld/Options.html#Options

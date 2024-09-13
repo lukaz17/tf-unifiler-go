@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 )
 
@@ -24,8 +25,10 @@ type Environment struct {
 	Date          string // git info
 	Branch        string // git info
 	Tag           string // git info
-	BuildNum      string
-	IsPullRequest bool
+	Platform      string // os info (GOOS)
+	Architecture  string // os info (GOARCH)
+	BuildNum      string // ci info
+	IsPullRequest bool   // ci info
 }
 
 func (env Environment) String() string {
@@ -34,7 +37,9 @@ func (env Environment) String() string {
 }
 
 func Env() Environment {
-	env := applyEnvFlags(Environment{Name: "local", Repo: "ethereum/go-ethereum"})
+	env := applyEnvFlags(Environment{Name: "local", Repo: "tforceaio/tf-unifiler-go"})
+	env.Platform = runtime.GOOS
+	env.Architecture = runtime.GOARCH
 
 	head := readGitFile("HEAD")
 	if fields := strings.Fields(head); len(fields) == 2 {
