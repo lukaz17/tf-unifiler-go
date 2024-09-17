@@ -65,6 +65,12 @@ func main() {
 	log.Info().Msgf("Working directory %s", pwd)
 	log.Info().Msgf("Executable file %s", exec)
 
+	if invokeArgs.File != nil {
+		m := FileModule{
+			logger: diag.GetModuleLogger("file"),
+		}
+		m.File(invokeArgs.File)
+	}
 	if invokeArgs.Hash != nil {
 		m := HashModule{
 			logger: diag.GetModuleLogger("hash"),
