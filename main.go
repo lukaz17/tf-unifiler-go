@@ -93,6 +93,7 @@ func main() {
 	}
 	if invokeArgs.Video != nil {
 		m := VideoModule{
+			cfg:    cfg,
 			logger: diag.GetModuleLogger("video"),
 		}
 		m.Video(invokeArgs.Video)
