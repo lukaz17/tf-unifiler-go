@@ -10,6 +10,7 @@ import (
 	"github.com/alexflint/go-arg"
 	"github.com/rs/zerolog/log"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
+	"github.com/tforceaio/tf-unifiler-go/cmd/config"
 	"github.com/tforceaio/tf-unifiler-go/diag"
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
@@ -47,7 +48,8 @@ func version() string {
 }
 
 func main() {
-	logFile := diag.InitZerolog()
+	cfg, cfgErr := config.InitKoanf()
+	logFile := diag.InitZerolog(cfg.ConfigDir)
 	if logFile != nil {
 		defer logFile.Close()
 	}
@@ -63,7 +65,13 @@ func main() {
 
 	log.Info().Msgf("TF UNIFILER v%s", version())
 	log.Info().Msgf("Working directory %s", pwd)
+	log.Info().Msgf("Config directory %s", cfg.ConfigDir)
 	log.Info().Msgf("Executable file %s", exec)
+	log.Info().Msgf("Portable mode %t", cfg.IsPortable)
+	if cfgErr != nil {
+		log.Err(cfgErr).Str("configFile", cfg.ConfigFile).Msg("Error initialize configuration file")
+		return
+	}
 
 	if invokeArgs.File != nil {
 		m := FileModule{

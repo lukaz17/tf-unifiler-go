@@ -1,7 +1,10 @@
 package config
 
 type RootConfig struct {
-	Path *PathConfig `koanf:"paths"`
+	ConfigDir  string
+	ConfigFile string
+	IsPortable bool
+	Path       *PathConfig `koanf:"paths"`
 }
 
 type PathConfig struct {

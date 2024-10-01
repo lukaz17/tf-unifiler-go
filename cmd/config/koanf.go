@@ -1,6 +1,9 @@
 package config
 
 import (
+	"os"
+	"path"
+	"runtime"
 	"strings"
 
 	"github.com/knadh/koanf/parsers/yaml"
@@ -22,10 +25,43 @@ func BuildConfig(f string) (*RootConfig, error) {
 
 	var config RootConfig
 	err := k.Unmarshal("", &config)
-	if err != nil {
-		return nil, err
+	return &config, err
+}
+
+func InitKoanf() (*RootConfig, error) {
+	if cfg != nil {
+		return cfg, nil
 	}
-	return &config, nil
+	isPortable := IsPortable()
+	configFile := "unifiler.yml"
+	if isPortable {
+		exec, _ := os.Executable()
+		exec, _ = filesystem.GetAbsPath(exec)
+		configFile = path.Join(path.Dir(exec), "unifiler.yml")
+	} else if runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
+		home := os.Getenv("HOME")
+		configFile = path.Join(home, ".config", "unifiler", "unifiler.yml")
+	} else if runtime.GOOS == "windows" {
+		appData := filesystem.NormalizePath(os.Getenv("APPDATA"))
+		configFile = path.Join(appData, "Unifiler", "unifiler.yml")
+	}
+	var err error
+	cfg, err = BuildConfig(configFile)
+	if err != nil {
+		return cfg, err
+	}
+
+	cfg.ConfigDir = path.Dir(configFile)
+	cfg.ConfigFile = configFile
+	cfg.IsPortable = isPortable
+	return cfg, nil
+}
+
+func IsPortable() bool {
+	exec, _ := os.Executable()
+	exec, _ = filesystem.GetAbsPath(exec)
+	portableFile := path.Join(path.Dir(exec), "unifiler.portable")
+	return filesystem.IsFileExist(portableFile)
 }
 
 func defaultConfig() *koanf.Koanf {
