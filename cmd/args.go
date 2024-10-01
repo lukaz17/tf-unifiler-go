@@ -1,9 +1,19 @@
 package cmd
 
 type Args struct {
+	File   *FileCmd   `arg:"subcommand:file" help:"Batch files processing"`
 	Hash   *HashCmd   `arg:"subcommand:hash" help:"Compute or verify checksum"`
 	Mirror *MirrorCmd `arg:"subcommand:mirror" help:"Create links for files and directories to save disk space for similar files"`
 	Video  *VideoCmd  `arg:"subcommand:video" help:"Special operations related to video"`
+}
+
+type FileCmd struct {
+	Rename *FileRenameCmd `arg:"subcommand:rename" help:"Multi file rename"`
+}
+
+type FileRenameCmd struct {
+	Files  []string `arg:"-f, --file" help:"Files and/or directories to rename"`
+	Preset string   `arg:"-p,--preset" help:"Preset for creating new file name"`
 }
 
 type HashCmd struct {

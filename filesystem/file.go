@@ -47,7 +47,7 @@ func CreateEntry(fPath string) (*FsEntry, error) {
 	}
 	entry := &FsEntry{
 		AbsolutePath: absolutePath,
-		RelativePath: fPath,
+		RelativePath: NormalizePath(fPath),
 		Name:         fileInfo.Name(),
 		IsDir:        fileInfo.IsDir(),
 	}
@@ -116,6 +116,12 @@ func IsFileExist(fPath string) bool {
 		return false
 	}
 	return !fileInfo.IsDir()
+}
+
+func Join(elem ...string) string {
+	result := path.Join(elem...)
+	result = NormalizePath(result)
+	return result
 }
 
 func List(fPaths []string, recursive bool) (FsEntries, error) {
