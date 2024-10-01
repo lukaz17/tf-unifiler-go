@@ -10,6 +10,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
+	"github.com/tforceaio/tf-unifiler-go/cmd/config"
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 	"github.com/tforceaio/tf-unifiler-go/filesystem/exec"
@@ -17,6 +18,7 @@ import (
 )
 
 type VideoModule struct {
+	cfg    *config.RootConfig
 	logger zerolog.Logger
 }
 
@@ -50,7 +52,7 @@ func (m *VideoModule) VideoInfo(args *cmd.VideoInfoCmd) {
 		OutputFile:   miFile,
 	}
 
-	stdout, err := exec.Run("mediainfo", exec.NewMediaInfoArgs(miOptions))
+	stdout, err := exec.Run(m.cfg.Path.MediaInfoPath, exec.NewMediaInfoArgs(miOptions))
 	if err != nil {
 		m.logger.Err(err).Msg("Error analyzing video file information")
 	}
@@ -92,7 +94,7 @@ func (m *VideoModule) VideoScreenshot(args *cmd.VideoScreenshotCmd) {
 		InputFile:    inputFile.AbsolutePath,
 		OutputFormat: "JSON",
 	}
-	stdout, err := exec.Run("mediainfo", exec.NewMediaInfoArgs(miOptions))
+	stdout, err := exec.Run(m.cfg.Path.MediaInfoPath, exec.NewMediaInfoArgs(miOptions))
 	if err != nil {
 		m.logger.Err(err).Msg("Error analyzing video file information")
 		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
@@ -146,7 +148,7 @@ func (m *VideoModule) VideoScreenshot(args *cmd.VideoScreenshotCmd) {
 			ffmOptions.VideoFilter = vfHDR
 		}
 
-		_, err := exec.Run("ffmpeg", exec.NewFFmpegArgs(ffmOptions))
+		_, err := exec.Run(m.cfg.Path.FFMpegPath, exec.NewFFmpegArgs(ffmOptions))
 		if err != nil {
 			m.logger.Err(err).Msg("Error taking video file screenshot")
 			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
