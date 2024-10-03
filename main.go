@@ -19,8 +19,8 @@ import (
 
 var invokeArgs cmd.Args
 var majorVersion = 0
-var minorVersion = 2
-var patchVersion = 1
+var minorVersion = 3
+var patchVersion = 0
 var gitCommit, gitDate, gitBranch string
 
 func version() string {
