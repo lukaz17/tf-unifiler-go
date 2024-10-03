@@ -2,8 +2,11 @@ package main
 
 import (
 	"encoding/hex"
+	"encoding/json"
 	"os"
 	"path"
+	"strconv"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
@@ -14,23 +17,28 @@ import (
 	"github.com/tforceaio/tf-unifiler-go/parser"
 )
 
+type MirrorFileMapping struct {
+	Source string `json:"s,omitempty"`
+	Hash   string `json:"h,omitempty"`
+}
+
 type MirrorModule struct {
 	logger zerolog.Logger
 }
 
 func (m *MirrorModule) Mirror(args *cmd.MirrorCmd) {
 	if args.Export != nil {
-		m.MirrorExport(args.Export)
+		m.export(args.Export)
 	} else if args.Import != nil {
-		m.MirrorImport(args.Import)
+		m.import2(args.Import)
 	} else if args.Scan != nil {
-		m.MirrorScan(args.Scan)
+		m.scan(args.Scan)
 	} else {
 		m.logger.Error().Msg("Invalid arguments")
 	}
 }
 
-func (m *MirrorModule) MirrorExport(args *cmd.MirrorExportCmd) {
+func (m *MirrorModule) export(args *cmd.MirrorExportCmd) {
 	if args.Cache == "" {
 		m.logger.Error().Msg("Cache not set")
 		return
@@ -108,7 +116,7 @@ func (m *MirrorModule) MirrorExport(args *cmd.MirrorExportCmd) {
 	}
 }
 
-func (m *MirrorModule) MirrorImport(args *cmd.MirrorImportCmd) {
+func (m *MirrorModule) import2(args *cmd.MirrorImportCmd) {
 	if args.Cache == "" {
 		m.logger.Error().Msg("Cache not set")
 		return
@@ -184,7 +192,7 @@ func (m *MirrorModule) MirrorImport(args *cmd.MirrorImportCmd) {
 	}
 }
 
-func (m *MirrorModule) MirrorScan(args *cmd.MirrorScanCmd) {
+func (m *MirrorModule) scan(args *cmd.MirrorScanCmd) {
 	if args.Cache == "" {
 		m.logger.Error().Msg("Cache not set")
 		return
@@ -219,10 +227,30 @@ func (m *MirrorModule) MirrorScan(args *cmd.MirrorScanCmd) {
 			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
 			return
 		}
+		m.logger.Info().Str("algo", "sha256").Int("size", fhResult.Size).Msgf("File hashed '%s'", c.RelativePath)
 		fhResult.Path = c.AbsolutePath
 		hResults = append(hResults, fhResult)
 	}
 
+	mappings := []*MirrorFileMapping{}
+	for _, e := range hResults {
+		mapping := &MirrorFileMapping{
+			Source: e.Path,
+			Hash:   hex.EncodeToString(e.Hash),
+		}
+		mappings = append(mappings, mapping)
+	}
+	currentTimestamp := time.Now().UnixMilli()
+	rollbackFilePath := filesystem.Join(args.Cache, "unifiler-mirror-"+strconv.FormatInt(currentTimestamp, 10)+".json")
+	fContent, _ := json.Marshal(mappings)
+	fContents := []string{string(fContent)}
+	err = filesystem.WriteLines(rollbackFilePath, fContents)
+	if err == nil {
+		m.logger.Info().Msgf("Written %d line(s) to '%s'", len(mappings), rollbackFilePath)
+	} else {
+		m.logger.Err(err).Msgf("Failed to write to '%s'", rollbackFilePath)
+		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
+	}
 	for _, r := range hResults {
 		name := hex.EncodeToString(r.Hash)
 		cachePath := path.Join(args.Cache, name)
