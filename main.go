@@ -83,7 +83,7 @@ func main() {
 	gitDate2, _ := time.Parse("20060102", gitDate)
 	buildDate := generic.TernaryAssign(gitDate == "", time.Now().UTC(), gitDate2)
 	log.Info().Msgf("Copyright (C) %d T-Force I/O", buildDate.Year())
-	log.Info().Msgf("Licensed under GPL-3.0 License. See COPYING file along with this program for more details.")
+	log.Info().Msgf("Licensed under GPL-3.0 license. See COPYING file along with this program for more details.")
 	log.Info().Msgf("Working directory %s", pwd)
 	log.Info().Msgf("Config directory %s", cfg.ConfigDir)
 	log.Info().Msgf("Executable file %s", exec)
