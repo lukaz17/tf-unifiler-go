@@ -26,7 +26,9 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
+	"github.com/tforceaio/tf-unifiler-go/core"
 	"github.com/tforceaio/tf-unifiler-go/crypto/hasher"
+	"github.com/tforceaio/tf-unifiler-go/db"
 	"github.com/tforceaio/tf-unifiler-go/extension"
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
@@ -42,10 +44,79 @@ type FileRenameMapping struct {
 }
 
 func (m *FileModule) File(args *cmd.FileCmd) {
-	if args.Rename != nil {
+	if args.Delete != nil {
+		m.Delete(args.Delete)
+	} else if args.Rename != nil {
 		m.Rename(args.Rename)
 	} else {
 		m.logger.Error().Msg("Invalid arguments")
+	}
+}
+
+func (m *FileModule) Delete(args *cmd.FileDeleteCmd) {
+	if len(args.Files) == 0 {
+		m.logger.Error().Msg("No input file")
+		return
+	}
+	m.logger.Info().
+		Array("files", extension.StringSlice(args.Files)).
+		Msgf("Start deleting files")
+
+	contents, err := filesystem.List(args.Files, true)
+	if err != nil {
+		m.logger.Err(err).Msg("Error listing input files")
+		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
+		return
+	}
+
+	hResults := []*db.Hash{}
+	algos := []string{"md5", "sha1", "sha256", "sha512"}
+	for _, c := range contents {
+		if c.IsDir {
+			continue
+		}
+		fhResults, err := hasher.Hash(c.RelativePath, algos)
+		if err != nil {
+			m.logger.Err(err).Msgf("Error computing hash for '%s'", c.RelativePath)
+			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
+			return
+		}
+		m.logger.Info().Array("algos", extension.StringSlice(algos)).Int("size", fhResults[0].Size).Msgf("File hashed '%s'", c.RelativePath)
+		fileMultiHash := &core.FileMultiHash{
+			Md5:      fhResults[0].Hash,
+			Sha1:     fhResults[1].Hash,
+			Sha256:   fhResults[2].Hash,
+			Sha512:   fhResults[3].Hash,
+			Size:     uint32(fhResults[0].Size),
+			FileName: c.Name,
+		}
+		hResults = append(hResults, db.NewHash(fileMultiHash, true))
+	}
+
+	dbFile := filesystem.Join(args.Workspace, "metadata.db")
+	ctx, err := db.Connect(dbFile)
+	if err != nil {
+		m.logger.Err(err).Msg("Error while opening metadata database.")
+		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
+		return
+	}
+	err = ctx.SaveHashes(hResults)
+	if err != nil {
+		m.logger.Err(err).Msg("Error while saving ignored files.")
+		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
+		return
+	}
+	for _, c := range contents {
+		if c.IsDir {
+			continue
+		}
+		err = os.Remove(c.AbsolutePath)
+		if err != nil {
+			m.logger.Err(err).Str("Path", c.RelativePath).Msg("Error while deleting file.")
+			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
+			return
+		}
+		m.logger.Info().Str("Path", c.RelativePath).Msgf("File %q deleted", c.RelativePath)
 	}
 }
 

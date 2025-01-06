@@ -24,7 +24,13 @@ type Args struct {
 }
 
 type FileCmd struct {
+	Delete *FileDeleteCmd `arg:"subcommand:delete" help:"Delete the files and add them to obsoletion lists for future cleanup"`
 	Rename *FileRenameCmd `arg:"subcommand:rename" help:"Multi file rename"`
+}
+
+type FileDeleteCmd struct {
+	Files     []string `arg:"-f,--file" help:"Files and/or directories to delete"`
+	Workspace string   `arg:"-c,--config" help:"Custom workspace location that store the metadata"`
 }
 
 type FileRenameCmd struct {
