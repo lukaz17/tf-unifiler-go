@@ -35,10 +35,10 @@ type Hash struct {
 
 func NewHash(fileHashes *core.FileMultiHash, isIgnored bool) *Hash {
 	return &Hash{
-		Md5:         fileHashes.Md5.Hex(),
-		Sha1:        fileHashes.Sha1.Hex(),
-		Sha256:      fileHashes.Sha256.Hex(),
-		Sha512:      fileHashes.Sha512.Hex(),
+		Md5:         fileHashes.Md5.HexStr(),
+		Sha1:        fileHashes.Sha1.HexStr(),
+		Sha256:      fileHashes.Sha256.HexStr(),
+		Sha512:      fileHashes.Sha512.HexStr(),
 		Size:        fileHashes.Size,
 		Description: fileHashes.FileName,
 		IsIgnored:   isIgnored,

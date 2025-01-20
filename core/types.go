@@ -16,23 +16,13 @@
 
 package core
 
-import "encoding/hex"
-
-type Bytes []byte
-
-func (s Bytes) Value() []byte {
-	return s
-}
-
-func (s Bytes) Hex() string {
-	return hex.EncodeToString(s)
-}
+import "github.com/tforce-io/tf-golib/stdx"
 
 type FileMultiHash struct {
-	Md5      Bytes
-	Sha1     Bytes
-	Sha256   Bytes
-	Sha512   Bytes
+	Md5      stdx.Bytes
+	Sha1     stdx.Bytes
+	Sha256   stdx.Bytes
+	Sha512   stdx.Bytes
 	Size     uint32
 	FileName string
 }
