@@ -53,6 +53,14 @@ func (ctx *DbContext) GetHashBySha256(hash string) (*Hash, error) {
 	return ctx.findHashBySha256(hash)
 }
 
+func (ctx *DbContext) GetHashesBySetIDs(setIDs uuid.UUIDs) ([]*Hash, error) {
+	return ctx.findHashesBySetIDs(setIDs)
+}
+
+func (ctx *DbContext) GetHashesBySha256s(hashes []string) ([]*Hash, error) {
+	return ctx.findHashesBySha256s(hashes)
+}
+
 func (ctx *DbContext) SaveHash(hash *Hash) error {
 	changedHash, err := ctx.findHashBySha256(hash.Sha256)
 	if err != nil {
@@ -73,7 +81,7 @@ func (ctx *DbContext) SaveHashes(hashes []*Hash) error {
 	for i, hash := range hashes {
 		sha256s[i] = hash.Sha256
 	}
-	changedHashes, err := ctx.findHashesBySha256(sha256s)
+	changedHashes, err := ctx.findHashesBySha256s(sha256s)
 	if err != nil {
 		return err
 	}
@@ -113,7 +121,15 @@ func (ctx *DbContext) findHashBySha256(hash string) (*Hash, error) {
 	return doc, result.Error
 }
 
-func (ctx *DbContext) findHashesBySha256(hashes []string) ([]*Hash, error) {
+func (ctx *DbContext) findHashesBySetIDs(setIDs uuid.UUIDs) ([]*Hash, error) {
+	var docs []*Hash
+	result := ctx.db.Model(&Hash{}).
+		InnerJoins("hashes ON hashes.id = set_hashes.hash_id AND set_hashes.set_id IN ?", setIDs).
+		Find(&docs)
+	return docs, result.Error
+}
+
+func (ctx *DbContext) findHashesBySha256s(hashes []string) ([]*Hash, error) {
 	var docs []*Hash
 	result := ctx.db.Model(&Hash{}).
 		Where("sha256 IN ?", hashes).

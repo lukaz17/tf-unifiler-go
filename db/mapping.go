@@ -16,10 +16,13 @@
 
 package db
 
-import "github.com/google/uuid"
+import (
+	"github.com/google/uuid"
+	"github.com/tforce-io/tf-golib/stdx/opx"
+)
 
 type Mapping struct {
-	ID        uint64    `gorm:"column:id;primaryKey;autoIncrement"`
+	ID        uuid.UUID `gorm:"column:id;primaryKey"`
 	HashID    uuid.UUID `gorm:"column:hash_id"`
 	Name      string    `gorm:"column:name"`
 	Extension string    `gorm:"column:extension"`
@@ -30,4 +33,98 @@ func (e *Mapping) FullName() string {
 		return e.Name
 	}
 	return e.Name + e.Extension
+}
+
+func NewMapping(hashID uuid.UUID, name, extension string) *Mapping {
+	return &Mapping{
+		HashID:    hashID,
+		Name:      name,
+		Extension: extension,
+	}
+}
+
+func (ctx *DbContext) GetMappingsByHashIDs(hashes uuid.UUIDs) ([]*Mapping, error) {
+	return ctx.findMappingsByHashIDs(hashes)
+}
+
+func (ctx *DbContext) GetMappingsBySha256s(hashes []string) ([]*Mapping, error) {
+	return ctx.findMappingsBySha256s(hashes)
+}
+
+func (ctx *DbContext) SaveMappings(mappings []*Mapping) error {
+	hashes := make([]uuid.UUID, len(mappings))
+	for i, mapping := range mappings {
+		hashes[i] = mapping.HashID
+	}
+	changedMappings, err := ctx.findMappingsByHashIDs(hashes)
+	if err != nil {
+		return err
+	}
+	newMappings := []*Mapping{}
+	for _, mapping := range mappings {
+		existed := opx.ContainsFunc(changedMappings, mapping, areEqualMappings)
+		if !existed {
+			newMappings = append(newMappings, mapping)
+		}
+	}
+	return ctx.writeMappings(newMappings, []*Mapping{})
+}
+
+func (ctx *DbContext) findMappingsByHashIDs(hashes uuid.UUIDs) ([]*Mapping, error) {
+	var docs []*Mapping
+	result := ctx.db.Model(&Mapping{}).
+		Where("hash_id IN ?", hashes).
+		Find(&docs)
+	return docs, result.Error
+}
+
+func (ctx *DbContext) findMappingsBySha256s(hashes []string) ([]*Mapping, error) {
+	var docs []*Mapping
+	result := ctx.db.Model(&Mapping{}).
+		InnerJoins("hashes ON hashes.id = mappings.hash_id AND hashes.sha256 IN ?", hashes).
+		Find(&docs)
+	return docs, result.Error
+}
+
+func (ctx *DbContext) writeMappings(newMappings []*Mapping, changedMappings []*Mapping) error {
+	tx := ctx.db.Begin()
+	for _, mapping := range newMappings {
+		if mapping.ID == uuid.Nil {
+			var err error
+			mapping.ID, err = uuid.NewV7()
+			if err != nil {
+				return err
+			}
+		}
+		result := tx.Create(mapping)
+		if result.Error != nil {
+			tx.Rollback()
+			return result.Error
+		}
+	}
+	for _, mapping := range changedMappings {
+		result := tx.Model(&Mapping{}).
+			Where("id = ?", mapping.ID).
+			Updates(map[string]interface{}{
+				"hash_id":   mapping.HashID,
+				"name":      mapping.Name,
+				"extension": mapping.Extension,
+			})
+		if result.Error != nil {
+			tx.Rollback()
+			return result.Error
+		}
+	}
+	tx.Commit()
+	return nil
+}
+
+func areEqualMappings(x, y *Mapping) bool {
+	if x == nil && y == nil {
+		return true
+	}
+	if x == nil || y == nil {
+		return false
+	}
+	return x.HashID == y.HashID && x.Name == y.Name && x.Extension == y.Extension
 }

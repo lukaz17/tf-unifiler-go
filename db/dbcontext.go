@@ -40,7 +40,7 @@ func (c *DbContext) Disconnect() {
 }
 
 func (c *DbContext) Migrate() error {
-	return c.db.AutoMigrate(&Hash{}, &Mapping{})
+	return c.db.AutoMigrate(&Hash{}, &Mapping{}, &Set{}, &SetHash{})
 }
 
 func (c *DbContext) isEmptyResultError(err error) bool {
