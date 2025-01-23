@@ -42,11 +42,11 @@ func (ctx *DbContext) GetSetHashesBySetIDs(hashes uuid.UUIDs) ([]*SetHash, error
 }
 
 func (ctx *DbContext) SaveSetHashes(setHashes []*SetHash) error {
-	hashes := make([]uuid.UUID, len(setHashes))
+	setIDs := make([]uuid.UUID, len(setHashes))
 	for i, setHash := range setHashes {
-		hashes[i] = setHash.HashID
+		setIDs[i] = setHash.SetID
 	}
-	changedSetHashes, err := ctx.findSetHashesBySetIDs(hashes)
+	changedSetHashes, err := ctx.findSetHashesBySetIDs(setIDs)
 	if err != nil {
 		return err
 	}
