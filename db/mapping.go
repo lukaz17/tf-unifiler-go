@@ -18,7 +18,7 @@ package db
 
 import (
 	"github.com/google/uuid"
-	"github.com/tforce-io/tf-golib/stdx/opx"
+	"github.com/tforce-io/tf-golib/opx/slicext"
 )
 
 type Mapping struct {
@@ -62,7 +62,7 @@ func (ctx *DbContext) SaveMappings(mappings []*Mapping) error {
 	}
 	newMappings := []*Mapping{}
 	for _, mapping := range mappings {
-		existed := opx.ContainsFunc(changedMappings, mapping, areEqualMappings)
+		existed := slicext.ContainsFunc(changedMappings, mapping, areEqualMappings)
 		if !existed {
 			newMappings = append(newMappings, mapping)
 		}

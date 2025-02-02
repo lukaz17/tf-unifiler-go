@@ -18,7 +18,7 @@ package db
 
 import (
 	"github.com/google/uuid"
-	"github.com/tforce-io/tf-golib/stdx/opx"
+	"github.com/tforce-io/tf-golib/opx/slicext"
 )
 
 type SetHash struct {
@@ -52,7 +52,7 @@ func (ctx *DbContext) SaveSetHashes(setHashes []*SetHash) error {
 	}
 	newSetHashes := []*SetHash{}
 	for _, setHash := range setHashes {
-		existed := opx.ContainsFunc(changedSetHashes, setHash, areEqualSetHashes)
+		existed := slicext.ContainsFunc(changedSetHashes, setHash, areEqualSetHashes)
 		if !existed {
 			newSetHashes = append(newSetHashes, setHash)
 		}

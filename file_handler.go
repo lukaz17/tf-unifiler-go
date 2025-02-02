@@ -26,7 +26,7 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
-	"github.com/tforce-io/tf-golib/stdx/opx"
+	"github.com/tforce-io/tf-golib/opx/slicext"
 	"github.com/tforce-io/tf-golib/strfmt"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
 	"github.com/tforceaio/tf-unifiler-go/core"
@@ -255,7 +255,7 @@ func (m *FileModule) saveHResults(workspace string, hResults []*core.FileMultiHa
 		m.logger.Err(err).Msg("Error while saving Mappings.")
 		return err
 	}
-	if !opx.IsEmptySlice(collections) {
+	if !slicext.IsEmpty(collections) {
 		// save Set
 		sets := make([]*db.Set, len(collections))
 		for i, name := range collections {
