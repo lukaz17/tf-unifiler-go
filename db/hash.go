@@ -25,7 +25,7 @@ type Hash struct {
 	ID     uuid.UUID `gorm:"column:id;primaryKey"`
 	Md5    string    `gorm:"column:md5"`
 	Sha1   string    `gorm:"column:sha1"`
-	Sha256 string    `gorm:"column:sha256"`
+	Sha256 string    `gorm:"column:sha256;uniqueIndex"`
 	Sha512 string    `gorm:"column:sha512"`
 
 	Size        uint32 `gorm:"column:size"`

@@ -21,6 +21,8 @@ import (
 	"gorm.io/gorm"
 )
 
+var schemaVersion = 1
+
 type DbContext struct {
 	db  *gorm.DB
 	uri string
@@ -41,6 +43,20 @@ func (c *DbContext) Disconnect() {
 
 func (c *DbContext) Migrate() error {
 	return c.db.AutoMigrate(&Hash{}, &Mapping{}, &Set{}, &SetHash{})
+}
+
+func (c *DbContext) Count(model interface{}, query, args interface{}) (int64, error) {
+	var count int64
+	if query == nil {
+		result := c.db.Model(model).Count(&count)
+		return count, result.Error
+	}
+	result := c.db.Model(model).Where(query, args).Count(&count)
+	return count, result.Error
+}
+
+func (c *DbContext) Truncate(model interface{}) {
+	c.db.Where("1 = 1").Delete(model)
 }
 
 func (c *DbContext) isEmptyResultError(err error) bool {
