@@ -58,6 +58,7 @@ func (ctx *DbContext) SaveSets(sets []*Set) error {
 			continue
 		}
 		newSets = append(newSets, set)
+		changedSetsMap[set.Name] = set.ID
 	}
 	return ctx.writeSets(newSets, []*Set{})
 }

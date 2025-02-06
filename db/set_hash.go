@@ -53,9 +53,11 @@ func (ctx *DbContext) SaveSetHashes(setHashes []*SetHash) error {
 	newSetHashes := []*SetHash{}
 	for _, setHash := range setHashes {
 		existed := slicext.ContainsFunc(changedSetHashes, setHash, areEqualSetHashes)
-		if !existed {
-			newSetHashes = append(newSetHashes, setHash)
+		if existed {
+			continue
 		}
+		newSetHashes = append(newSetHashes, setHash)
+		changedSetHashes = append(changedSetHashes, setHash)
 	}
 	return ctx.writeSetHashes(newSetHashes, []*SetHash{})
 }

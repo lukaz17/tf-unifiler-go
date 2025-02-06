@@ -32,6 +32,7 @@ func TestSaveSetHashes(t *testing.T) {
 		{"new_set_hash", []*testingSetHash{exes[5], exes[6]}, 19},
 		{"duplicated_set_hash", []*testingSetHash{exes[0], exes[1]}, 17},
 		{"duplicated_set_hash", []*testingSetHash{imgs[9], imgs[10], imgs[15]}, 18},
+		{"same_set_hash", []*testingSetHash{imgs[9], imgs[15], imgs[15]}, 18},
 	}
 	for _, tt := range tests {
 		t.Run(tt.group, func(t *testing.T) {

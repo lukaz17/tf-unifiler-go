@@ -95,6 +95,7 @@ func (ctx *DbContext) SaveHashes(hashes []*Hash) error {
 			continue
 		}
 		newHashes = append(newHashes, hash)
+		changedHashesMap[hash.Sha256] = hash.ID
 	}
 	return ctx.writeHashes(newHashes, []*Hash{})
 }

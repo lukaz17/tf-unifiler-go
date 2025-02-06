@@ -63,9 +63,11 @@ func (ctx *DbContext) SaveMappings(mappings []*Mapping) error {
 	newMappings := []*Mapping{}
 	for _, mapping := range mappings {
 		existed := slicext.ContainsFunc(changedMappings, mapping, areEqualMappings)
-		if !existed {
-			newMappings = append(newMappings, mapping)
+		if existed {
+			continue
 		}
+		newMappings = append(newMappings, mapping)
+		changedMappings = append(changedMappings, mapping)
 	}
 	return ctx.writeMappings(newMappings, []*Mapping{})
 }

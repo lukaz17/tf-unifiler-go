@@ -34,6 +34,8 @@ func TestSaveMappings(t *testing.T) {
 		{"new_mapping", []*testingMapping{execs[5], execs[6]}, 19},
 		{"duplicated_mapping", []*testingMapping{imgs[7], imgs[7]}, 17},
 		{"duplicated_mapping", []*testingMapping{imgs[9], imgs[15]}, 18},
+		{"same_hash_same_filename", []*testingMapping{imgs[15], imgs[15]}, 18},
+		{"same_hash_different_filename", []*testingMapping{imgs[16], imgs[17]}, 19},
 	}
 	for _, tt := range tests {
 		t.Run(tt.group, func(t *testing.T) {

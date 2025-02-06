@@ -32,6 +32,7 @@ func TestSaveSets(t *testing.T) {
 		{"new_set", []*testingSet{sets[2]}, 3},
 		{"duplicated_set_name", []*testingSet{sets[0], sets[1]}, 2},
 		{"duplicated_set_name", []*testingSet{sets[1], sets[2], sets[3]}, 4},
+		{"same_name", []*testingSet{sets[3], sets[3], sets[3]}, 3},
 	}
 	for _, tt := range tests {
 		t.Run(tt.group, func(t *testing.T) {
