@@ -37,7 +37,7 @@ func TestOpen(t *testing.T) {
 
 func getTestDB(entity, function string) *DbContext {
 	hasher := sha256.New()
-	featSign := fmt.Sprintf("%s/%s/v%d", entity, function, schemaVersion)
+	featSign := fmt.Sprintf("%s/%s/v%d", entity, function, SchemaVersion)
 	hasher.Write([]byte(featSign))
 	hashBuf := hasher.Sum(nil)
 	hash := hex.EncodeToString(hashBuf[:])

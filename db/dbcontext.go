@@ -21,7 +21,7 @@ import (
 	"gorm.io/gorm"
 )
 
-var schemaVersion = 1
+var SchemaVersion = 1
 
 type DbContext struct {
 	db  *gorm.DB

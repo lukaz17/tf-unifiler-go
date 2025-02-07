@@ -17,9 +17,17 @@
 package main
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
+
+	"github.com/tforce-io/tf-golib/multiarch"
+	"github.com/tforce-io/tf-golib/opx"
+	"github.com/tforceaio/tf-unifiler-go/db"
 )
 
 func TestEmptyCommand(t *testing.T) {
@@ -80,4 +88,24 @@ func TestCreateHashCommand(t *testing.T) {
 			}
 		})
 	}
+}
+
+func getTestDB(entity, function string) *db.DbContext {
+	hasher := sha256.New()
+	featSign := fmt.Sprintf("%s/%s/v%d", entity, function, db.SchemaVersion)
+	hasher.Write([]byte(featSign))
+	hashBuf := hasher.Sum(nil)
+	hash := hex.EncodeToString(hashBuf[:])
+	fileName := fmt.Sprintf("unifiler_%s.db", hash)
+	tmpDir := opx.Ternary(
+		multiarch.IsWindows(),
+		os.Getenv("TEMP"),
+		"/tmp",
+	)
+	dbFile := filepath.Join(tmpDir, fileName)
+	ctx, err := db.Connect(dbFile)
+	if err != nil {
+		panic(err)
+	}
+	return ctx
 }

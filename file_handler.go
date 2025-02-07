@@ -97,7 +97,14 @@ func (m *FileModule) Scan(args *cmd.FileScanCmd, delete bool) {
 		}
 		hResults = append(hResults, fileMultiHash)
 	}
-	err = m.saveHResults(args.Workspace, hResults, delete, args.Collections)
+	dbFile := filesystem.Join(args.Workspace, "metadata.db")
+	ctx, err := db.Connect(dbFile)
+	if err != nil {
+		m.logger.Err(err).Msg("Error while opening metadata database.")
+		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
+		return
+	}
+	err = m.saveHResults(ctx, hResults, delete, args.Collections)
 	if err != nil {
 		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
 		return
@@ -214,13 +221,7 @@ func (m *FileModule) RenameByHash(args *cmd.FileRenameCmd, algo string, prefix s
 	}
 }
 
-func (m *FileModule) saveHResults(workspace string, hResults []*core.FileMultiHash, ignore bool, collections []string) error {
-	dbFile := filesystem.Join(workspace, "metadata.db")
-	ctx, err := db.Connect(dbFile)
-	if err != nil {
-		m.logger.Err(err).Msg("Error while opening metadata database.")
-		return err
-	}
+func (m *FileModule) saveHResults(ctx *db.DbContext, hResults []*core.FileMultiHash, ignore bool, collections []string) (err error) {
 	// save Hash
 	hashes := make([]*db.Hash, len(hResults))
 	for i, res := range hResults {
@@ -229,7 +230,7 @@ func (m *FileModule) saveHResults(workspace string, hResults []*core.FileMultiHa
 	err = ctx.SaveHashes(hashes)
 	if err != nil {
 		m.logger.Err(err).Msg("Error while saving Hashes.")
-		return err
+		return
 	}
 	// save Mapping
 	sha256s := make([]string, len(hResults))
@@ -239,7 +240,7 @@ func (m *FileModule) saveHResults(workspace string, hResults []*core.FileMultiHa
 	hashes, err = ctx.GetHashesBySha256s(sha256s)
 	if err != nil {
 		m.logger.Err(err).Msg("Error while reloading Hashes.")
-		return err
+		return
 	}
 	hashesMap := map[string]uuid.UUID{}
 	for _, hash := range hashes {
@@ -253,7 +254,7 @@ func (m *FileModule) saveHResults(workspace string, hResults []*core.FileMultiHa
 	err = ctx.SaveMappings(mappings)
 	if err != nil {
 		m.logger.Err(err).Msg("Error while saving Mappings.")
-		return err
+		return
 	}
 	if !slicext.IsEmpty(collections) {
 		// save Set
@@ -264,13 +265,13 @@ func (m *FileModule) saveHResults(workspace string, hResults []*core.FileMultiHa
 		err = ctx.SaveSets(sets)
 		if err != nil {
 			m.logger.Err(err).Msg("Error while saving Sets.")
-			return err
+			return
 		}
 		// save SetHash
 		sets, err = ctx.GetSetsByNames(collections)
 		if err != nil {
 			m.logger.Err(err).Msg("Error while reloading Sets.")
-			return err
+			return
 		}
 		setHashes := make([]*db.SetHash, len(sets)*len(hashes))
 		for i, set := range sets {
@@ -279,12 +280,12 @@ func (m *FileModule) saveHResults(workspace string, hResults []*core.FileMultiHa
 				setHashes[i*hashesLen+j] = db.NewSetHash(set.ID, hash.ID)
 			}
 		}
-		err := ctx.SaveSetHashes(setHashes)
+		err = ctx.SaveSetHashes(setHashes)
 		if err != nil {
 			m.logger.Err(err).Msg("Error while saving SetHashes.")
-			return err
+			return
 		}
 	}
 	m.logger.Info().Msg("All hashes saved successfully.")
-	return nil
+	return
 }
