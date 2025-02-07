@@ -24,12 +24,22 @@ type Args struct {
 }
 
 type FileCmd struct {
+	Delete *FileDeleteCmd `arg:"subcommand:delete" help:"Delete the files and add them to obsoletion lists for future cleanup"`
 	Rename *FileRenameCmd `arg:"subcommand:rename" help:"Multi file rename"`
+	Scan   *FileScanCmd   `arg:"subcommand:scan" help:"Scan the files and add them to collection"`
 }
+
+type FileDeleteCmd FileScanCmd
 
 type FileRenameCmd struct {
 	Files  []string `arg:"-f, --file" help:"Files and/or directories to rename"`
 	Preset string   `arg:"-p,--preset" help:"Preset for creating new file name"`
+}
+
+type FileScanCmd struct {
+	Collections []string `arg:"-c,--collection" help:"Name of collection of known files. If collection existed, files will be appended to that collection."`
+	Files       []string `arg:"-f,--file" help:"Files and/or directories to delete."`
+	Workspace   string   `arg:"-w,--workspace" help:"Custom workspace location that store the metadata."`
 }
 
 type HashCmd struct {
