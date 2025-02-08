@@ -35,7 +35,7 @@ import (
 
 var invokeArgs cmd.Args
 var majorVersion = 0
-var minorVersion = 3
+var minorVersion = 4
 var patchVersion = 0
 var gitCommit, gitDate, gitBranch string
 
