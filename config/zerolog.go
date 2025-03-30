@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with TF Unifiler. If not, see <https://www.gnu.org/licenses/>.
 
-package diag
+package config
 
 import (
 	"fmt"
@@ -27,10 +27,12 @@ import (
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 )
 
-func InitZerolog(configDir string) *os.File {
+func InitZerolog(configDir string) (zerolog.Logger, *os.File) {
 	consoleWriter := &zerolog.FilteredLevelWriter{
-		Writer: zerolog.LevelWriterAdapter{zerolog.ConsoleWriter{Out: os.Stdout, NoColor: false, TimeFormat: time.DateTime}},
-		Level:  zerolog.InfoLevel,
+		Writer: zerolog.LevelWriterAdapter{
+			Writer: zerolog.ConsoleWriter{Out: os.Stdout, NoColor: true, TimeFormat: time.DateTime},
+		},
+		Level: zerolog.TraceLevel,
 	}
 
 	logFile := ""
@@ -42,23 +44,19 @@ func InitZerolog(configDir string) *os.File {
 	if !filesystem.IsExist(logDir) {
 		err := filesystem.CreateDirectoryRecursive(logDir)
 		if err != nil {
-			log.Logger = zerolog.New(consoleWriter).With().Timestamp().Logger()
+			consoleLogger := zerolog.New(consoleWriter).With().Timestamp().Logger()
 			log.Err(err).Msgf("Cannot create log file: %s", logFile)
-			return nil
+			return consoleLogger, nil
 		}
 	}
 	fileWriter, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
 	if err != nil {
-		log.Logger = zerolog.New(consoleWriter).With().Timestamp().Logger()
+		consoleLogger := zerolog.New(consoleWriter).With().Timestamp().Logger()
 		log.Err(err).Msgf("Cannot create log file: %s", logFile)
-		return nil
+		return consoleLogger, nil
 	}
 
 	multiWriter := zerolog.MultiLevelWriter(consoleWriter, fileWriter)
-	log.Logger = zerolog.New(multiWriter).With().Timestamp().Logger()
-	return fileWriter
-}
-
-func GetModuleLogger(name string) zerolog.Logger {
-	return log.Logger.With().Str("module", name).Logger()
+	logger := zerolog.New(multiWriter).With().Timestamp().Logger()
+	return logger, nil
 }

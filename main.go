@@ -24,10 +24,8 @@ import (
 	"time"
 
 	"github.com/alexflint/go-arg"
-	"github.com/rs/zerolog/log"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
-	"github.com/tforceaio/tf-unifiler-go/cmd/config"
-	"github.com/tforceaio/tf-unifiler-go/diag"
+	"github.com/tforceaio/tf-unifiler-go/config"
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 	"github.com/tforceaio/tf-unifiler-go/filesystem/exec"
@@ -64,13 +62,11 @@ func version() string {
 }
 
 func main() {
-	cfg, cfgErr := config.InitKoanf()
-	logFile := diag.InitZerolog(cfg.ConfigDir)
-	if logFile != nil {
-		defer logFile.Close()
-	}
-	filesystem.SetLogger(diag.GetModuleLogger("filesystem"))
-	exec.SetLogger(diag.GetModuleLogger("exec"))
+	cfg := config.Init()
+	defer cfg.Close()
+
+	filesystem.SetLogger(cfg.ModuleLogger("filesystem"))
+	exec.SetLogger(cfg.ModuleLogger("exec"))
 
 	invokeArgs = cmd.Args{}
 	arg.MustParse(&invokeArgs)
@@ -79,42 +75,38 @@ func main() {
 	exec, _ := os.Executable()
 	exec, _ = filesystem.GetAbsPath(exec)
 
-	log.Info().Msgf("TF UNIFILER v%s", version())
+	cfg.Logger.Info().Msgf("TF UNIFILER v%s", version())
 	gitDate2, _ := time.Parse("20060102", gitDate)
 	buildDate := generic.TernaryAssign(gitDate == "", time.Now().UTC(), gitDate2)
-	log.Info().Msgf("Copyright (C) %d T-Force I/O", buildDate.Year())
-	log.Info().Msgf("Licensed under GPL-3.0 license. See COPYING file along with this program for more details.")
-	log.Info().Msgf("Working directory %s", pwd)
-	log.Info().Msgf("Config directory %s", cfg.ConfigDir)
-	log.Info().Msgf("Executable file %s", exec)
-	log.Info().Msgf("Portable mode %t", cfg.IsPortable)
-	if cfgErr != nil {
-		log.Err(cfgErr).Str("configFile", cfg.ConfigFile).Msg("Error initialize configuration file")
-		return
-	}
+	cfg.Logger.Info().Msgf("Copyright (C) %d T-Force I/O", buildDate.Year())
+	cfg.Logger.Info().Msgf("Licensed under GPL-3.0 license. See COPYING file along with this program for more details.")
+	cfg.Logger.Info().Msgf("Working directory %s", pwd)
+	cfg.Logger.Info().Msgf("Config directory %s", cfg.Root.ConfigDir)
+	cfg.Logger.Info().Msgf("Executable file %s", exec)
+	cfg.Logger.Info().Msgf("Portable mode %t", cfg.Root.IsPortable)
 
 	if invokeArgs.File != nil {
 		m := FileModule{
-			logger: diag.GetModuleLogger("file"),
+			logger: cfg.ModuleLogger("file"),
 		}
 		m.File(invokeArgs.File)
 	}
 	if invokeArgs.Hash != nil {
 		m := HashModule{
-			logger: diag.GetModuleLogger("hash"),
+			logger: cfg.ModuleLogger("hash"),
 		}
 		m.Hash(invokeArgs.Hash)
 	}
 	if invokeArgs.Mirror != nil {
 		m := MirrorModule{
-			logger: diag.GetModuleLogger("mirror"),
+			logger: cfg.ModuleLogger("mirror"),
 		}
 		m.Mirror(invokeArgs.Mirror)
 	}
 	if invokeArgs.Video != nil {
 		m := VideoModule{
-			cfg:    cfg,
-			logger: diag.GetModuleLogger("video"),
+			cfg:    cfg.Root,
+			logger: cfg.ModuleLogger("video"),
 		}
 		m.Video(invokeArgs.Video)
 	}

@@ -26,7 +26,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
-	"github.com/tforceaio/tf-unifiler-go/cmd/config"
+	"github.com/tforceaio/tf-unifiler-go/config"
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 	"github.com/tforceaio/tf-unifiler-go/filesystem/exec"
