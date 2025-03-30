@@ -25,7 +25,7 @@ import (
 func TestFileConfig(t *testing.T) {
 	prepareTests()
 
-	cfg, err := BuildConfig("../../.tests/config/unifiler.yml")
+	cfg, err := BuildConfig(true, "../../.tests/config/unifiler.yml")
 	if err != nil {
 		t.Error("Error get config from file", err)
 	}

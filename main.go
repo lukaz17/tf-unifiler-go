@@ -62,7 +62,7 @@ func version() string {
 }
 
 func main() {
-	cfg := config.Init()
+	cfg := config.Init(true)
 	defer cfg.Close()
 
 	filesystem.SetLogger(cfg.ModuleLogger("filesystem"))

@@ -20,14 +20,16 @@ import (
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
+	"github.com/tforce-io/tf-golib/opx"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 )
 
-func InitZerolog(configDir string) (zerolog.Logger, *os.File) {
+// Entrypoint for creating a ZeroLog logger instance.
+func InitZerolog(configDir string, useFS bool) (zerolog.Logger, *os.File, error) {
 	consoleWriter := &zerolog.FilteredLevelWriter{
 		Writer: zerolog.LevelWriterAdapter{
 			Writer: zerolog.ConsoleWriter{Out: os.Stdout, NoColor: true, TimeFormat: time.DateTime},
@@ -35,28 +37,40 @@ func InitZerolog(configDir string) (zerolog.Logger, *os.File) {
 		Level: zerolog.TraceLevel,
 	}
 
-	logFile := ""
-	if configDir != "" {
-		date := time.Now().UTC().Format("20060102")
-		logFile = path.Join(configDir, "logs", fmt.Sprintf("unifiler-%s.log", date))
+	logFile, err := InitLogFile(useFS, configDir)
+	if logFile == nil {
+		consoleLogger := zerolog.New(consoleWriter).With().Timestamp().Logger()
+		return consoleLogger, nil, err
 	}
-	logDir := path.Join(configDir, "logs")
+
+	fileWriter := &zerolog.FilteredLevelWriter{
+		Writer: zerolog.LevelWriterAdapter{
+			Writer: logFile,
+		},
+		Level: zerolog.TraceLevel,
+	}
+	multiWriter := zerolog.MultiLevelWriter(consoleWriter, fileWriter)
+	logger := zerolog.New(multiWriter).With().Timestamp().Logger()
+	return logger, logFile, nil
+}
+
+// Create and return log file handle only if useFS is true.
+func InitLogFile(useFS bool, workdingDir string) (*os.File, error) {
+	if !useFS {
+		return nil, nil
+	}
+	logDir := path.Join(opx.Ternary(workdingDir == "", ".", workdingDir), "logs")
 	if !filesystem.IsExist(logDir) {
 		err := filesystem.CreateDirectoryRecursive(logDir)
 		if err != nil {
-			consoleLogger := zerolog.New(consoleWriter).With().Timestamp().Logger()
-			log.Err(err).Msgf("Cannot create log file: %s", logFile)
-			return consoleLogger, nil
+			return nil, err
 		}
 	}
-	fileWriter, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
+	logFileName := fmt.Sprintf("unifiler-%s.log", time.Now().UTC().Format("20060102"))
+	logFilePath := filepath.Join(logDir, logFileName)
+	logFile, err := os.OpenFile(logFilePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0664)
 	if err != nil {
-		consoleLogger := zerolog.New(consoleWriter).With().Timestamp().Logger()
-		log.Err(err).Msgf("Cannot create log file: %s", logFile)
-		return consoleLogger, nil
+		return nil, err
 	}
-
-	multiWriter := zerolog.MultiLevelWriter(consoleWriter, fileWriter)
-	logger := zerolog.New(multiWriter).With().Timestamp().Logger()
-	return logger, nil
+	return logFile, nil
 }

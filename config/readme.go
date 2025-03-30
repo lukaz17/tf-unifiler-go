@@ -1,4 +1,4 @@
-// Copyright (C) 2024 T-Force I/O
+// Copyright (C) 2025 T-Force I/O
 // This file is part of TF Unifiler
 //
 // TF Unifiler is free software: you can redistribute it and/or modify
@@ -14,22 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with TF Unifiler. If not, see <https://www.gnu.org/licenses/>.
 
+/*
+Package config contains initialization code for logging, and reading configuration
+file and environment variables.
+*/
 package config
-
-// Struct RootConfig contains all available configurations.
-type RootConfig struct {
-	ConfigDir  string
-	ConfigFile string
-	IsPortable bool
-	Path       *PathConfig `koanf:"paths"`
-}
-
-// Struct PathConfig contains configurations related for external dependencies
-// location.
-type PathConfig struct {
-	FFMpegPath      string `koanf:"ffmpeg"`
-	ImageMagickPath string `koanf:"imagemagick"`
-	MediaInfoPath   string `koanf:"mediainfo"`
-	X264Path        string `koanf:"x264"`
-	X265Path        string `koanf:"x265"`
-}
