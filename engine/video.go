@@ -38,10 +38,10 @@ type VideoModule struct {
 	logger zerolog.Logger
 }
 
-func NewVideoModule(cfg *config.Controller) *VideoModule {
+func NewVideoModule(c *Controller) *VideoModule {
 	return &VideoModule{
-		cfg:    cfg.Root,
-		logger: cfg.ModuleLogger("Video"),
+		cfg:    c.Root,
+		logger: c.ModuleLogger("Video"),
 	}
 }
 

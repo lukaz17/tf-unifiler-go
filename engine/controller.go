@@ -14,18 +14,19 @@
 // You should have received a copy of the GNU General Public License
 // along with TF Unifiler. If not, see <https://www.gnu.org/licenses/>.
 
-package config
+package engine
 
 import (
 	"os"
 
 	"github.com/rs/zerolog"
+	"github.com/tforceaio/tf-unifiler-go/config"
 )
 
 // Controller is the entrypoint for working with application configurations and
 // loggings.
 type Controller struct {
-	Root   *RootConfig
+	Root   *config.RootConfig
 	Logger zerolog.Logger
 
 	logFile *os.File
@@ -33,9 +34,9 @@ type Controller struct {
 
 // Entrypoint for creating new instance of Controller.
 // useFS will instruct this function to read configurations and create log file.
-func Init(useFS bool) *Controller {
-	config, err := InitKoanf(useFS)
-	logger, logFile, err2 := InitZerolog(config.ConfigDir, useFS)
+func NewController(useFS bool) *Controller {
+	cfg, err := config.InitKoanf(useFS)
+	logger, logFile, err2 := config.InitZerolog(cfg.ConfigDir, useFS)
 	if err != nil {
 		logger.Err(err).Msg("error initializing config")
 	}
@@ -43,7 +44,7 @@ func Init(useFS bool) *Controller {
 		logger.Err(err2).Msg("error initializing log file")
 	}
 	return &Controller{
-		Root:   config,
+		Root:   cfg,
 		Logger: logger,
 
 		logFile: logFile,

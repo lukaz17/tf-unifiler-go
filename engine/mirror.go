@@ -26,7 +26,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
-	"github.com/tforceaio/tf-unifiler-go/config"
 	"github.com/tforceaio/tf-unifiler-go/crypto/hasher"
 	"github.com/tforceaio/tf-unifiler-go/extension"
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
@@ -43,9 +42,9 @@ type MirrorModule struct {
 	logger zerolog.Logger
 }
 
-func NewMirrorModule(cfg *config.Controller) *MirrorModule {
+func NewMirrorModule(c *Controller) *MirrorModule {
 	return &MirrorModule{
-		logger: cfg.ModuleLogger("Mirror"),
+		logger: c.ModuleLogger("Mirror"),
 	}
 }
 

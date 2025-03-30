@@ -18,7 +18,6 @@ package cmd
 
 type Args struct {
 	File   *FileCmd   `arg:"subcommand:file" help:"Batch files processing"`
-	Hash   *HashCmd   `arg:"subcommand:hash" help:"Compute or verify checksum"`
 	Mirror *MirrorCmd `arg:"subcommand:mirror" help:"Create links for files and directories to save disk space for similar files"`
 	Video  *VideoCmd  `arg:"subcommand:video" help:"Special operations related to video"`
 }
@@ -40,16 +39,6 @@ type FileScanCmd struct {
 	Collections []string `arg:"-c,--collection" help:"Name of collection of known files. If collection existed, files will be appended to that collection."`
 	Files       []string `arg:"-f,--file" help:"Files and/or directories to delete."`
 	Workspace   string   `arg:"-w,--workspace" help:"Custom workspace location that store the metadata."`
-}
-
-type HashCmd struct {
-	Create *HashCreateCmd `arg:"subcommand:create" help:"Compute hash for files and directories"`
-}
-
-type HashCreateCmd struct {
-	Algorithms []string `arg:"-a,--algo" help:"Hash algorithms to use, multiple supported. Valid algorithms: md4, md5, ripemd160, sha1, sha224, sha256, sha384, sha512"`
-	Files      []string `arg:"-f,--file" help:"Files and/or directories to compute hashes"`
-	Output     string   `arg:"-o,--out" help:"File or directory to store the result"`
 }
 
 type MirrorCmd struct {

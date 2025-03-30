@@ -18,57 +18,46 @@ package engine
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
 
 	"github.com/rs/zerolog"
-	"github.com/tforceaio/tf-unifiler-go/cmd"
-	"github.com/tforceaio/tf-unifiler-go/config"
+	"github.com/spf13/cobra"
 	"github.com/tforceaio/tf-unifiler-go/crypto/hasher"
 	"github.com/tforceaio/tf-unifiler-go/extension"
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 )
 
+// HashModule handles user requests related checksum file creation and verification.
 type HashModule struct {
 	logger zerolog.Logger
 }
 
-func NewHashModule(cfg *config.Controller) *HashModule {
+// Return new HashModule.
+func NewHashModule(c *Controller, cmdName string) *HashModule {
 	return &HashModule{
-		logger: cfg.ModuleLogger("Hash"),
+		logger: c.CommandLogger("hash", cmdName),
 	}
 }
 
-func (m *HashModule) Hash(args *cmd.HashCmd) {
-	if args.Create != nil {
-		m.CreateHash(args.Create)
-	} else {
-		m.logger.Error().Msg("Invalid arguments")
+// Create checksum file(s) for inputs using 1 or many algorithms.
+func (m *HashModule) Create(inputs []string, output string, algorithms []string) error {
+	if len(algorithms) == 0 {
+		return errors.New("no hash algorithm specified")
 	}
-}
 
-func (m *HashModule) CreateHash(args *cmd.HashCreateCmd) {
-	if len(args.Files) == 0 {
-		m.logger.Error().Msg("No input file")
-		return
-	}
-	if len(args.Algorithms) == 0 {
-		m.logger.Error().Msg("No hash algorithm")
-		return
-	}
 	m.logger.Info().
-		Array("algos", extension.StringSlice(args.Algorithms)).
-		Array("files", extension.StringSlice(args.Files)).
-		Str("output", args.Output).
-		Msgf("Start computing hash")
+		Array("algos", extension.StringSlice(algorithms)).
+		Array("files", extension.StringSlice(inputs)).
+		Str("output", output).
+		Msgf("Start computing hashes.")
 
-	contents, err := filesystem.List(args.Files, true)
+	contents, err := filesystem.List(inputs, true)
 	if err != nil {
-		m.logger.Err(err).Msg("Error listing input files")
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-		return
+		return err
 	}
 
 	hResults := []*hasher.HashResult{}
@@ -76,17 +65,15 @@ func (m *HashModule) CreateHash(args *cmd.HashCreateCmd) {
 		if c.IsDir {
 			continue
 		}
-		fhResults, err := hasher.Hash(c.RelativePath, args.Algorithms)
-		m.logger.Info().Array("algos", extension.StringSlice(args.Algorithms)).Int("size", fhResults[0].Size).Msgf("File hashed '%s'", c.RelativePath)
+		fhResults, err := hasher.Hash(c.RelativePath, algorithms)
+		m.logger.Info().Array("algos", extension.StringSlice(algorithms)).Int("size", fhResults[0].Size).Msgf("File hashed '%s'", c.RelativePath)
 		if err != nil {
-			m.logger.Err(err).Msgf("Error computing hash for '%s'", c.RelativePath)
-			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-			return
+			return err
 		}
 		hResults = append(hResults, fhResults...)
 	}
 
-	for _, a := range args.Algorithms {
+	for _, a := range algorithms {
 		fContents := []string{}
 		for _, r := range hResults {
 			if a == r.Algorithm {
@@ -95,18 +82,59 @@ func (m *HashModule) CreateHash(args *cmd.HashCreateCmd) {
 			}
 		}
 
-		if args.Output == "" {
-			m.logger.Warn().Msg("output is not specified, use default name instead")
-		}
-		output := generic.TernaryAssign(args.Output == "", "checksum", args.Output)
+		outputInternal := generic.TernaryAssign(output == "", "checksum", output)
 		// substitute file extension. for more information: https://go.dev/play/p/0wZcne8ZC8G
-		oPath := fmt.Sprintf("%s.%s", strings.TrimSuffix(output, filepath.Ext(output)), a)
+		oPath := fmt.Sprintf("%s.%s", strings.TrimSuffix(outputInternal, filepath.Ext(outputInternal)), a)
 		err := filesystem.WriteLines(oPath, fContents)
-		if err == nil {
-			m.logger.Info().Msgf("Written %d line(s) to '%s'", len(fContents), oPath)
-		} else {
-			m.logger.Err(err).Msgf("Failed to write to '%s'", oPath)
-			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
+		if err != nil {
+			return err
 		}
+		m.logger.Info().Msgf("Written %d line(s) to '%s'", len(fContents), oPath)
+	}
+	return nil
+}
+
+func (m *HashModule) logError(err error) {
+	if err != nil {
+		m.logger.Err(err).Msgf("Unexpected error has occurred. Program will exit.")
+	}
+}
+
+// Define Cobra Command for Hash module.
+func HashCmd() *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:   "hash",
+		Short: "Create and verify checksum files.",
+	}
+
+	createCmd := &cobra.Command{
+		Use:   "create <output path> <input path> [<input path>...]",
+		Short: "Create checksum file(s) using 1 or many hash algorithms.",
+		Args:  cobra.MinimumNArgs(2),
+		Run: func(cmd *cobra.Command, args []string) {
+			c := InitApp()
+			defer c.Close()
+			flags := ParseHashFlags(cmd)
+			m := NewHashModule(c, "create")
+			m.logError(m.Create(args[1:], args[0], flags.Algorithms))
+		},
+	}
+	createCmd.Flags().StringSliceP("algo", "a", []string{"sha1"}, "Hash algorithms to use, multiple supported. Valid algorithms: md4, md5, ripemd160, sha1, sha224, sha256, sha384, sha512.")
+	rootCmd.AddCommand(createCmd)
+
+	return rootCmd
+}
+
+// Struct HashFlags contains all flags used by Hash module.
+type HashFlags struct {
+	Algorithms []string
+}
+
+// Extract all flags from a Cobra Command.
+func ParseHashFlags(cmd *cobra.Command) *HashFlags {
+	algorithms, _ := cmd.Flags().GetStringSlice("algo")
+
+	return &HashFlags{
+		Algorithms: algorithms,
 	}
 }

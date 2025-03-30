@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with TF Unifiler. If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package engine
 
 import (
 	"fmt"
@@ -23,16 +23,11 @@ import (
 	"strings"
 	"time"
 
-	"github.com/alexflint/go-arg"
-	"github.com/tforceaio/tf-unifiler-go/cmd"
-	"github.com/tforceaio/tf-unifiler-go/config"
-	"github.com/tforceaio/tf-unifiler-go/engine"
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 	"github.com/tforceaio/tf-unifiler-go/filesystem/exec"
 )
 
-var invokeArgs cmd.Args
 var majorVersion = 0
 var minorVersion = 4
 var patchVersion = 0
@@ -62,15 +57,14 @@ func version() string {
 	return fmt.Sprintf("%d.%d.%s.%d", majorVersion, minor, patch, duration.Milliseconds()/int64(86400000))
 }
 
-func main() {
-	cfg := config.Init(true)
-	defer cfg.Close()
+// Initialize configurations, loggings for internal modules, and display basic
+// information about this invocation.
+func InitApp() *Controller {
+	cfg := NewController(true)
 
 	filesystem.SetLogger(cfg.ModuleLogger("filesystem"))
 	exec.SetLogger(cfg.ModuleLogger("exec"))
 
-	invokeArgs = cmd.Args{}
-	arg.MustParse(&invokeArgs)
 	pwd, _ := os.Getwd()
 	pwd, _ = filesystem.GetAbsPath(pwd)
 	exec, _ := os.Executable()
@@ -86,20 +80,5 @@ func main() {
 	cfg.Logger.Info().Msgf("Executable file %s", exec)
 	cfg.Logger.Info().Msgf("Portable mode %t", cfg.Root.IsPortable)
 
-	if invokeArgs.File != nil {
-		m := engine.NewFileModule(cfg)
-		m.File(invokeArgs.File)
-	}
-	if invokeArgs.Hash != nil {
-		m := engine.NewHashModule(cfg)
-		m.Hash(invokeArgs.Hash)
-	}
-	if invokeArgs.Mirror != nil {
-		m := engine.NewMirrorModule(cfg)
-		m.Mirror(invokeArgs.Mirror)
-	}
-	if invokeArgs.Video != nil {
-		m := engine.NewVideoModule(cfg)
-		m.Video(invokeArgs.Video)
-	}
+	return cfg
 }

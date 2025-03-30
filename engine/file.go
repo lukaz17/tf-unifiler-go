@@ -29,7 +29,6 @@ import (
 	"github.com/tforce-io/tf-golib/opx/slicext"
 	"github.com/tforce-io/tf-golib/strfmt"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
-	"github.com/tforceaio/tf-unifiler-go/config"
 	"github.com/tforceaio/tf-unifiler-go/core"
 	"github.com/tforceaio/tf-unifiler-go/crypto/hasher"
 	"github.com/tforceaio/tf-unifiler-go/db"
@@ -42,9 +41,9 @@ type FileModule struct {
 	logger zerolog.Logger
 }
 
-func NewFileModule(cfg *config.Controller) *FileModule {
+func NewFileModule(c *Controller) *FileModule {
 	return &FileModule{
-		logger: cfg.ModuleLogger("File"),
+		logger: c.ModuleLogger("File"),
 	}
 }
 
