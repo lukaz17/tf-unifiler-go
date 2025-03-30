@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with TF Unifiler. If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package engine
 
 import (
 	"encoding/hex"
@@ -24,6 +24,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
+	"github.com/tforceaio/tf-unifiler-go/config"
 	"github.com/tforceaio/tf-unifiler-go/crypto/hasher"
 	"github.com/tforceaio/tf-unifiler-go/extension"
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
@@ -32,6 +33,12 @@ import (
 
 type HashModule struct {
 	logger zerolog.Logger
+}
+
+func NewHashModule(cfg *config.Controller) *HashModule {
+	return &HashModule{
+		logger: cfg.ModuleLogger("Hash"),
+	}
 }
 
 func (m *HashModule) Hash(args *cmd.HashCmd) {

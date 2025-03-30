@@ -26,6 +26,7 @@ import (
 	"github.com/alexflint/go-arg"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
 	"github.com/tforceaio/tf-unifiler-go/config"
+	"github.com/tforceaio/tf-unifiler-go/engine"
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 	"github.com/tforceaio/tf-unifiler-go/filesystem/exec"
@@ -86,28 +87,19 @@ func main() {
 	cfg.Logger.Info().Msgf("Portable mode %t", cfg.Root.IsPortable)
 
 	if invokeArgs.File != nil {
-		m := FileModule{
-			logger: cfg.ModuleLogger("file"),
-		}
+		m := engine.NewFileModule(cfg)
 		m.File(invokeArgs.File)
 	}
 	if invokeArgs.Hash != nil {
-		m := HashModule{
-			logger: cfg.ModuleLogger("hash"),
-		}
+		m := engine.NewHashModule(cfg)
 		m.Hash(invokeArgs.Hash)
 	}
 	if invokeArgs.Mirror != nil {
-		m := MirrorModule{
-			logger: cfg.ModuleLogger("mirror"),
-		}
+		m := engine.NewMirrorModule(cfg)
 		m.Mirror(invokeArgs.Mirror)
 	}
 	if invokeArgs.Video != nil {
-		m := VideoModule{
-			cfg:    cfg.Root,
-			logger: cfg.ModuleLogger("video"),
-		}
+		m := engine.NewVideoModule(cfg)
 		m.Video(invokeArgs.Video)
 	}
 }

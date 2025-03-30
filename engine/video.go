@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with TF Unifiler. If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package engine
 
 import (
 	"fmt"
@@ -36,6 +36,13 @@ import (
 type VideoModule struct {
 	cfg    *config.RootConfig
 	logger zerolog.Logger
+}
+
+func NewVideoModule(cfg *config.Controller) *VideoModule {
+	return &VideoModule{
+		cfg:    cfg.Root,
+		logger: cfg.ModuleLogger("Video"),
+	}
 }
 
 func (m *VideoModule) Video(args *cmd.VideoCmd) {

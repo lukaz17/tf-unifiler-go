@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with TF Unifiler. If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package engine
 
 import (
 	"encoding/hex"
@@ -29,6 +29,7 @@ import (
 	"github.com/tforce-io/tf-golib/opx/slicext"
 	"github.com/tforce-io/tf-golib/strfmt"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
+	"github.com/tforceaio/tf-unifiler-go/config"
 	"github.com/tforceaio/tf-unifiler-go/core"
 	"github.com/tforceaio/tf-unifiler-go/crypto/hasher"
 	"github.com/tforceaio/tf-unifiler-go/db"
@@ -39,6 +40,12 @@ import (
 
 type FileModule struct {
 	logger zerolog.Logger
+}
+
+func NewFileModule(cfg *config.Controller) *FileModule {
+	return &FileModule{
+		logger: cfg.ModuleLogger("File"),
+	}
 }
 
 type FileRenameMapping struct {

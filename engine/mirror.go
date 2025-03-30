@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with TF Unifiler. If not, see <https://www.gnu.org/licenses/>.
 
-package main
+package engine
 
 import (
 	"encoding/hex"
@@ -26,6 +26,7 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/tforceaio/tf-unifiler-go/cmd"
+	"github.com/tforceaio/tf-unifiler-go/config"
 	"github.com/tforceaio/tf-unifiler-go/crypto/hasher"
 	"github.com/tforceaio/tf-unifiler-go/extension"
 	"github.com/tforceaio/tf-unifiler-go/extension/generic"
@@ -40,6 +41,12 @@ type MirrorFileMapping struct {
 
 type MirrorModule struct {
 	logger zerolog.Logger
+}
+
+func NewMirrorModule(cfg *config.Controller) *MirrorModule {
+	return &MirrorModule{
+		logger: cfg.ModuleLogger("Mirror"),
+	}
 }
 
 func (m *MirrorModule) Mirror(args *cmd.MirrorCmd) {
