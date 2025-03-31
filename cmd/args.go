@@ -17,9 +17,8 @@
 package cmd
 
 type Args struct {
-	File   *FileCmd   `arg:"subcommand:file" help:"Batch files processing"`
-	Mirror *MirrorCmd `arg:"subcommand:mirror" help:"Create links for files and directories to save disk space for similar files"`
-	Video  *VideoCmd  `arg:"subcommand:video" help:"Special operations related to video"`
+	File  *FileCmd  `arg:"subcommand:file" help:"Batch files processing"`
+	Video *VideoCmd `arg:"subcommand:video" help:"Special operations related to video"`
 }
 
 type FileCmd struct {
@@ -39,29 +38,6 @@ type FileScanCmd struct {
 	Collections []string `arg:"-c,--collection" help:"Name of collection of known files. If collection existed, files will be appended to that collection."`
 	Files       []string `arg:"-f,--file" help:"Files and/or directories to delete."`
 	Workspace   string   `arg:"-w,--workspace" help:"Custom workspace location that store the metadata."`
-}
-
-type MirrorCmd struct {
-	Export *MirrorExportCmd `arg:"subcommand:export" help:"Generates file structure using cached files and checksum file"`
-	Import *MirrorImportCmd `arg:"subcommand:import" help:"Import to cache directory using pre computed checksum file"`
-	Scan   *MirrorScanCmd   `arg:"subcommand:scan" help:"Scan files and/or directories and create hardlink to cache directory"`
-}
-
-type MirrorExportCmd struct {
-	Cache      string `arg:"-c,--cache" help:"Directory to store the cached files. Must be in the same physical partition as files for hardlinks to work"`
-	Checksum   string `arg:"-f,--file" help:"Checksum file contains the file structures for export"`
-	TargetRoot string `arg:"-r,--root" htlp:"Target root directory that will contains the file structure"`
-}
-
-type MirrorImportCmd struct {
-	Cache      string `arg:"-c,--cache" help:"Directory to store the cached files. Must be in the same physical partition as files for hardlinks to work"`
-	Checksum   string `arg:"-f,--file" help:"Checksum file contains the file structures for export"`
-	TargetRoot string `arg:"-r,--root" htlp:"Target root directory that will contains the file structure"`
-}
-
-type MirrorScanCmd struct {
-	Cache string   `arg:"-c,--cache" help:"Directory to store the cached files. Must be in the same physical partition as files for hardlinks to work"`
-	Files []string `arg:"-f,--file" help:"Files and/or directories to import to cache"`
 }
 
 type VideoCmd struct {

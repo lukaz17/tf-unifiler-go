@@ -19,223 +19,136 @@ package engine
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/rs/zerolog"
-	"github.com/tforceaio/tf-unifiler-go/cmd"
+	"github.com/spf13/cobra"
+	"github.com/tforce-io/tf-golib/opx"
 	"github.com/tforceaio/tf-unifiler-go/crypto/hasher"
-	"github.com/tforceaio/tf-unifiler-go/extension"
-	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 	"github.com/tforceaio/tf-unifiler-go/parser"
 )
 
-type MirrorFileMapping struct {
+// Struct FileMirrorMapping stores old and new filename after mirroring for rollback.
+type FileMirrorMapping struct {
 	Source string `json:"s,omitempty"`
 	Hash   string `json:"h,omitempty"`
 }
 
+// MirrorModule handles user requests related to file centralization feature.
 type MirrorModule struct {
 	logger zerolog.Logger
 }
 
-func NewMirrorModule(c *Controller) *MirrorModule {
+// Return new MirrorModule.
+func NewMirrorModule(c *Controller, cmdName string) *MirrorModule {
 	return &MirrorModule{
-		logger: c.ModuleLogger("Mirror"),
+		logger: c.CommandLogger("mirror", cmdName),
 	}
 }
 
-func (m *MirrorModule) Mirror(args *cmd.MirrorCmd) {
-	if args.Export != nil {
-		m.export(args.Export)
-	} else if args.Import != nil {
-		m.import2(args.Import)
-	} else if args.Scan != nil {
-		m.scan(args.Scan)
-	} else {
-		m.logger.Error().Msg("Invalid arguments")
+// Create file structure in targetDir using a checksumFile.
+func (m *MirrorModule) Export(workspaceDir, checksumFile, targetDir string) error {
+	if workspaceDir == "" {
+		return errors.New("workspace is not set")
+	} else if !filesystem.IsDirectoryExist(workspaceDir) {
+		return errors.New("workspace is not found")
 	}
-}
-
-func (m *MirrorModule) export(args *cmd.MirrorExportCmd) {
-	if args.Cache == "" {
-		m.logger.Error().Msg("Cache not set")
-		return
-	} else if !filesystem.IsDirectoryExist(args.Cache) {
-		m.logger.Error().Str("path", args.Cache).Msg("Cache path not found")
-		return
-	}
-	if args.Checksum == "" {
-		m.logger.Error().Msg("Checksum file not set")
-		return
-	} else if !filesystem.IsFileExist(args.Checksum) {
-		m.logger.Error().Str("path", args.Cache).Msg("Checksum file not found")
-		return
+	if checksumFile == "" {
+		return errors.New("checksum file is not set")
+	} else if !filesystem.IsFileExist(checksumFile) {
+		return errors.New("checksum file is not found")
 	}
 	m.logger.Info().
-		Str("cache", args.Cache).
-		Str("checksum", args.Checksum).
-		Str("root", args.TargetRoot).
-		Msgf("Start exporting files structure")
+		Str("cache", workspaceDir).
+		Str("checksum", checksumFile).
+		Str("root", targetDir).
+		Msgf("Start exporting files structure.")
 
-	checksumReader, err := os.OpenFile(args.Checksum, os.O_RDONLY, 0664)
+	workspaceRoot := MirrorWorkspaceRoot(workspaceDir)
+	checksumReader, err := os.OpenFile(checksumFile, os.O_RDONLY, 0664)
 	if err != nil {
-		m.logger.Err(err).Str("path", args.Cache).Msg("Cannot read checksum file")
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-		return
+		return err
 	}
 	items, err := parser.ParseSha256(checksumReader)
 	if err != nil {
-		m.logger.Err(err).Str("path", args.Cache).Msg("Invalid checksum file")
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-		return
+		return err
 	}
 	defer checksumReader.Close()
 
 	missingItems := []string{}
 	for _, l := range items {
-		cachePath := path.Join(args.Cache, l.Hash)
+		cachePath := path.Join(workspaceRoot, l.Hash)
 		if !filesystem.IsFileExist(cachePath) {
 			missingItems = append(missingItems, l.Hash)
 		}
 	}
 	if len(missingItems) > 0 {
-		m.logger.Error().Array("hashes", extension.StringSlice(missingItems)).Msg("Missing cache items")
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-		return
+		m.logger.Warn().
+			Strs("hashes", missingItems).
+			Msg("Items are not found in workspace.")
+		return errors.New("missing items in workspace")
 	}
 
-	if args.TargetRoot == "" {
-		m.logger.Warn().Msg("target root is not specified, it will be derived from checkfile path instead")
-	} else {
-		if filesystem.IsFileExist(args.TargetRoot) {
-			m.logger.Error().Msg("A file with same with target root existed")
-			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-			return
-		}
+	if targetDir == "" {
+		m.logger.Warn().Msg("Target path is not specified, it will be derived from checksum file path instead.")
 	}
-	targetRoot := args.TargetRoot
+	targetRoot := targetDir
 	if targetRoot == "" {
-		checksumPath, _ := filesystem.GetAbsPath(args.Checksum)
+		checksumPath, _ := filesystem.GetAbsPath(checksumFile)
 		targetRoot, _ = path.Split(checksumPath)
 	} else {
-		targetRoot, _ = filesystem.GetAbsPath(args.TargetRoot)
+		targetRoot, _ = filesystem.GetAbsPath(targetDir)
+	}
+	if filesystem.IsFileExist(targetRoot) {
+		return errors.New("a file with same name with target root existed")
 	}
 	for _, l := range items {
-		cachePath := path.Join(args.Cache, l.Hash)
-		targetPath := generic.TernaryAssign(filesystem.IsAbsPath(l.Path), l.Path, path.Join(targetRoot, l.Path))
+		cachePath := path.Join(workspaceRoot, l.Hash)
+		targetPath := opx.Ternary(filesystem.IsAbsPath(l.Path), l.Path, path.Join(targetRoot, l.Path))
 		err := filesystem.CreateHardlink(cachePath, targetPath)
 		if err != nil {
-			m.logger.Err(err).Str("src", cachePath).Str("target", targetPath).Msg("Error creating hardlink")
-			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-			return
+			m.logger.Info().
+				Str("src", cachePath).
+				Str("dest", targetPath).
+				Msg("Failed to create hardlink.")
+			return err
 		} else {
-			m.logger.Info().Str("src", cachePath).Str("target", targetPath).Msgf("Exported file '%s'", l.Hash)
+			m.logger.Info().
+				Str("hash", l.Hash).
+				Str("src", cachePath).
+				Str("dest", targetPath).
+				Msg("Exported file.")
 		}
 	}
+	return nil
 }
 
-func (m *MirrorModule) import2(args *cmd.MirrorImportCmd) {
-	if args.Cache == "" {
-		m.logger.Error().Msg("Cache not set")
-		return
+// Scan and calculate SHA-256 hashes for inputs (files/folders),
+// then create hardlink to workspaceDir.
+func (m *MirrorModule) Scan(workspaceDir string, inputs []string) error {
+	if workspaceDir == "" {
+		return errors.New("workspace is not set")
+	} else if !filesystem.IsDirectoryExist(workspaceDir) {
+		return errors.New("workspace is not found")
 	}
-	if args.Checksum == "" {
-		m.logger.Error().Msg("Checksum file not set")
-		return
-	} else if !filesystem.IsFileExist(args.Checksum) {
-		m.logger.Error().Str("path", args.Cache).Msg("Checksum file not found")
-		return
-	}
-	m.logger.Info().
-		Str("cache", args.Cache).
-		Str("checksum", args.Checksum).
-		Str("root", args.TargetRoot).
-		Msgf("Start importing files structure")
-
-	checksumReader, err := os.OpenFile(args.Checksum, os.O_RDONLY, 0664)
-	if err != nil {
-		m.logger.Err(err).Str("path", args.Cache).Msg("Cannot read checksum file")
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-		return
-	}
-	items, err := parser.ParseSha256(checksumReader)
-	if err != nil {
-		m.logger.Err(err).Str("path", args.Cache).Msg("Invalid checksum file")
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-		return
-	}
-	defer checksumReader.Close()
-
-	if args.TargetRoot == "" {
-		m.logger.Warn().Msg("target root is not specified, it will be derived from checkfile path instead")
-	} else {
-		if filesystem.IsFileExist(args.TargetRoot) {
-			m.logger.Error().Msg("A file with same with target root existed")
-			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-			return
-		}
-	}
-	targetRoot := args.TargetRoot
-	if targetRoot == "" {
-		checksumPath, _ := filesystem.GetAbsPath(args.Checksum)
-		targetRoot, _ = path.Split(checksumPath)
-	} else {
-		targetRoot, _ = filesystem.GetAbsPath(args.TargetRoot)
-	}
-
-	missingItems := []string{}
-	for _, l := range items {
-		sourcePath := generic.TernaryAssign(filesystem.IsAbsPath(l.Path), l.Path, path.Join(targetRoot, l.Path))
-		if !filesystem.IsFileExist(sourcePath) {
-			missingItems = append(missingItems, l.Path)
-		}
-	}
-	if len(missingItems) > 0 {
-		m.logger.Error().Array("files", extension.StringSlice(missingItems)).Msg("Missing source files")
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-		return
-	}
-
-	for _, l := range items {
-		sourcePath := generic.TernaryAssign(filesystem.IsAbsPath(l.Path), l.Path, path.Join(targetRoot, l.Path))
-		cachePath := path.Join(args.Cache, l.Hash)
-		err := filesystem.CreateHardlink(sourcePath, cachePath)
-		if err != nil {
-			m.logger.Err(err).Str("src", sourcePath).Str("target", cachePath).Msg("Error creating hardlink")
-			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-			return
-		} else {
-			m.logger.Info().Str("src", sourcePath).Str("target", cachePath).Msgf("Exported file '%s'", l.Hash)
-		}
-	}
-}
-
-func (m *MirrorModule) scan(args *cmd.MirrorScanCmd) {
-	if args.Cache == "" {
-		m.logger.Error().Msg("Cache not set")
-		return
-	} else if !filesystem.IsDirectoryExist(args.Cache) {
-		m.logger.Error().Str("path", args.Cache).Msg("Cache path not found")
-		return
-	}
-	if len(args.Files) == 0 {
-		m.logger.Error().Msg("No input file")
-		return
+	if len(inputs) == 0 {
+		return errors.New("inputs is empty")
 	}
 	m.logger.Info().
-		Str("cache", args.Cache).
-		Array("files", extension.StringSlice(args.Files)).
-		Msgf("Start scanning files")
+		Str("cache", workspaceDir).
+		Strs("inputs", inputs).
+		Msg("Start scanning files")
 
-	contents, err := filesystem.List(args.Files, true)
+	workspaceRoot := MirrorWorkspaceRoot(workspaceDir)
+	contents, err := filesystem.List(inputs, true)
 	if err != nil {
-		m.logger.Err(err).Msg("Error listing input files")
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-		return
+		return err
 	}
 
 	hResults := []*hasher.HashResult{}
@@ -245,47 +158,144 @@ func (m *MirrorModule) scan(args *cmd.MirrorScanCmd) {
 		}
 		fhResult, err := hasher.HashSha256(c.RelativePath)
 		if err != nil {
-			m.logger.Err(err).Msgf("Error computing hash for '%s'", c.RelativePath)
-			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-			return
+			m.logger.Info().
+				Str("path", c.RelativePath).
+				Msg("Failed to compute hash.")
+			return err
 		}
-		m.logger.Info().Str("algo", "sha256").Int("size", fhResult.Size).Msgf("File hashed '%s'", c.RelativePath)
+		m.logger.Info().
+			Str("algo", "sha256").
+			Str("path", c.RelativePath).
+			Int("size", fhResult.Size).
+			Msg("Hashed file.")
 		fhResult.Path = c.AbsolutePath
 		hResults = append(hResults, fhResult)
 	}
 
-	mappings := []*MirrorFileMapping{}
+	mappings := []*FileMirrorMapping{}
 	for _, e := range hResults {
-		mapping := &MirrorFileMapping{
+		mapping := &FileMirrorMapping{
 			Source: e.Path,
 			Hash:   hex.EncodeToString(e.Hash),
 		}
 		mappings = append(mappings, mapping)
 	}
+	for _, r := range hResults {
+		name := hex.EncodeToString(r.Hash)
+		cachePath := path.Join(workspaceRoot, name)
+		if filesystem.IsFileExist(cachePath) {
+			m.logger.Info().
+				Str("src", r.Path).
+				Str("cache", cachePath).
+				Msg("Skipped. File is already cached.")
+		} else {
+			err := filesystem.CreateHardlink(r.Path, cachePath)
+			if err != nil {
+				m.logger.Info().
+					Str("src", r.Path).
+					Str("dest", cachePath).
+					Msg("Failed to create hardlink.")
+				return err
+			}
+			m.logger.Info().
+				Str("src", r.Path).
+				Str("target", cachePath).
+				Msg("Created cache file.")
+		}
+	}
+
 	currentTimestamp := time.Now().UnixMilli()
-	rollbackFilePath := filesystem.Join(args.Cache, "unifiler-mirror-"+strconv.FormatInt(currentTimestamp, 10)+".json")
+	rollbackFilePath := filesystem.Join(workspaceRoot, "mirror-"+strconv.FormatInt(currentTimestamp, 10)+".json")
 	fContent, _ := json.Marshal(mappings)
 	fContents := []string{string(fContent)}
 	err = filesystem.WriteLines(rollbackFilePath, fContents)
 	if err == nil {
-		m.logger.Info().Msgf("Written %d line(s) to '%s'", len(mappings), rollbackFilePath)
+		m.logger.Info().
+			Int("lineCount", len(fContents)).
+			Str("path", rollbackFilePath).
+			Msg("Written rollback file.")
 	} else {
-		m.logger.Err(err).Msgf("Failed to write to '%s'", rollbackFilePath)
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
+		m.logger.Info().
+			Str("path", rollbackFilePath).
+			Msg("Failed to write rollback file.")
+		return err
 	}
-	for _, r := range hResults {
-		name := hex.EncodeToString(r.Hash)
-		cachePath := path.Join(args.Cache, name)
-		if filesystem.IsFileExist(cachePath) {
-			m.logger.Info().Str("src", r.Path).Str("cache", cachePath).Msg("File is already cached")
-		} else {
-			err := filesystem.CreateHardlink(r.Path, cachePath)
-			if err != nil {
-				m.logger.Err(err).Str("src", r.Path).Str("target", cachePath).Msg("Error creating hardlink")
-				m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-				return
-			}
-			m.logger.Info().Str("src", r.Path).Str("target", cachePath).Msgf("Created cache file")
-		}
+
+	return nil
+}
+
+// Decorator to log error occurred when calling handlers.
+func (m *MirrorModule) logError(err error) {
+	if err != nil {
+		m.logger.Err(err).Msgf("Unexpected error has occurred. Program will exit.")
+	}
+}
+
+// Return directory path to store Mirror module's ouputs inside Unifiler workspace.
+func MirrorWorkspaceRoot(workspaceDir string) string {
+	return filepath.Join(workspaceDir, ".unifiler", "mirror")
+}
+
+// Define Cobra Command for Mirror module.
+func MirrorCmd() *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:   "mirror",
+		Short: "Centralize and save disk space by utilizing hard link feature in supported file system.",
+	}
+
+	exportCmd := &cobra.Command{
+		Use:   "export",
+		Short: "Create file structure from checksum file.",
+		Run: func(cmd *cobra.Command, args []string) {
+			c := InitApp()
+			defer c.Close()
+			flags := ParseMirrorFlags(cmd)
+			m := NewMirrorModule(c, "export")
+			m.logError(m.Export(flags.WorkspaceDir, flags.ChecksumFile, flags.Output))
+		},
+	}
+	exportCmd.Flags().StringP("checksum", "i", "", "Checksum file path. Only supported SHA-256.")
+	exportCmd.Flags().StringP("output", "o", "", "Directory where the files will be exported.")
+	exportCmd.Flags().StringP("workspace", "w", "", "Directory contains Unifiler workspace.")
+	rootCmd.AddCommand(exportCmd)
+
+	scanCmd := &cobra.Command{
+		Use:   "scan",
+		Short: "Scan and compute hashes files/directories then create hardlink to workspace.",
+		Run: func(cmd *cobra.Command, args []string) {
+			c := InitApp()
+			defer c.Close()
+			flags := ParseMirrorFlags(cmd)
+			m := NewMirrorModule(c, "export")
+			m.logError(m.Scan(flags.WorkspaceDir, flags.Inputs))
+		},
+	}
+	scanCmd.Flags().StringSliceP("inputs", "i", []string{}, "Files/Directories to import.")
+	scanCmd.Flags().StringP("workspace", "w", "", "Directory contains Unifiler workspace.")
+	rootCmd.AddCommand(scanCmd)
+
+	return rootCmd
+}
+
+// Struct MirrorFlags contains all flags used by Mirror module.
+type MirrorFlags struct {
+	ChecksumFile string
+	Inputs       []string
+	Output       string
+	WorkspaceDir string
+}
+
+// Extract all flags from a Cobra Command.
+func ParseMirrorFlags(cmd *cobra.Command) *MirrorFlags {
+	checksumFile, _ := cmd.Flags().GetString("checksum")
+	inputs, _ := cmd.Flags().GetStringSlice("inputs")
+	output, _ := cmd.Flags().GetString("output")
+	workspaceDir, _ := cmd.Flags().GetString("workspace")
+
+	return &MirrorFlags{
+		ChecksumFile: checksumFile,
+		Inputs:       inputs,
+		Output:       output,
+		WorkspaceDir: workspaceDir,
 	}
 }
