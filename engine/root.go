@@ -41,7 +41,7 @@ Licensed under GPL-3.0 license. See COPYING file along with this program for mor
 		Short:   "Cross platform file managements command line utility.",
 		Version: version(),
 	}
-	rootCmd.AddCommand(HashCmd())
+	rootCmd.AddCommand(ChecksumCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

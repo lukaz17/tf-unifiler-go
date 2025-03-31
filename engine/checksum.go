@@ -25,35 +25,34 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
+	"github.com/tforce-io/tf-golib/opx"
 	"github.com/tforceaio/tf-unifiler-go/crypto/hasher"
-	"github.com/tforceaio/tf-unifiler-go/extension"
-	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 )
 
-// HashModule handles user requests related checksum file creation and verification.
-type HashModule struct {
+// ChecksumModule handles user requests related checksum file creation and verification.
+type ChecksumModule struct {
 	logger zerolog.Logger
 }
 
-// Return new HashModule.
-func NewHashModule(c *Controller, cmdName string) *HashModule {
-	return &HashModule{
-		logger: c.CommandLogger("hash", cmdName),
+// Return new ChecksumModule.
+func NewChecksumModule(c *Controller, cmdName string) *ChecksumModule {
+	return &ChecksumModule{
+		logger: c.CommandLogger("checksum", cmdName),
 	}
 }
 
 // Create checksum file(s) for inputs using 1 or many algorithms.
-func (m *HashModule) Create(inputs []string, output string, algorithms []string) error {
+func (m *ChecksumModule) Create(inputs []string, output string, algorithms []string) error {
 	if len(algorithms) == 0 {
-		return errors.New("no hash algorithm specified")
+		return errors.New("hash algorithm is not specified")
 	}
 
 	m.logger.Info().
-		Array("algos", extension.StringSlice(algorithms)).
-		Array("files", extension.StringSlice(inputs)).
+		Strs("algos", algorithms).
+		Strs("files", inputs).
 		Str("output", output).
-		Msgf("Start computing hashes.")
+		Msg("Start computing hashes.")
 
 	contents, err := filesystem.List(inputs, true)
 	if err != nil {
@@ -66,7 +65,11 @@ func (m *HashModule) Create(inputs []string, output string, algorithms []string)
 			continue
 		}
 		fhResults, err := hasher.Hash(c.RelativePath, algorithms)
-		m.logger.Info().Array("algos", extension.StringSlice(algorithms)).Int("size", fhResults[0].Size).Msgf("File hashed '%s'", c.RelativePath)
+		m.logger.Info().
+			Strs("algos", algorithms).
+			Str("file", c.RelativePath).
+			Int("size", fhResults[0].Size).
+			Msg("Hashed file.")
 		if err != nil {
 			return err
 		}
@@ -82,59 +85,74 @@ func (m *HashModule) Create(inputs []string, output string, algorithms []string)
 			}
 		}
 
-		outputInternal := generic.TernaryAssign(output == "", "checksum", output)
+		outputInternal := opx.Ternary(output == "", "checksum", output)
 		// substitute file extension. for more information: https://go.dev/play/p/0wZcne8ZC8G
 		oPath := fmt.Sprintf("%s.%s", strings.TrimSuffix(outputInternal, filepath.Ext(outputInternal)), a)
 		err := filesystem.WriteLines(oPath, fContents)
 		if err != nil {
 			return err
 		}
-		m.logger.Info().Msgf("Written %d line(s) to '%s'", len(fContents), oPath)
+		m.logger.Info().
+			Int("lineCount", len(fContents)).
+			Str("path", oPath).
+			Msg("Written checksum file.")
 	}
 	return nil
 }
 
-func (m *HashModule) logError(err error) {
+// Decorator to log error occurred when calling handlers.
+func (m *ChecksumModule) logError(err error) {
 	if err != nil {
-		m.logger.Err(err).Msgf("Unexpected error has occurred. Program will exit.")
+		m.logger.Err(err).Msg("Unexpected error has occurred. Program will exit.")
 	}
 }
 
-// Define Cobra Command for Hash module.
-func HashCmd() *cobra.Command {
+// Define Cobra Command for Checksum module.
+func ChecksumCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
-		Use:   "hash",
+		Use:   "checksum",
 		Short: "Create and verify checksum files.",
 	}
 
 	createCmd := &cobra.Command{
-		Use:   "create <output path> <input path> [<input path>...]",
+		Use:   "create",
 		Short: "Create checksum file(s) using 1 or many hash algorithms.",
-		Args:  cobra.MinimumNArgs(2),
 		Run: func(cmd *cobra.Command, args []string) {
 			c := InitApp()
 			defer c.Close()
-			flags := ParseHashFlags(cmd)
-			m := NewHashModule(c, "create")
-			m.logError(m.Create(args[1:], args[0], flags.Algorithms))
+			flags := ParseChecksumFlags(cmd)
+			m := NewChecksumModule(c, "create")
+			m.logError(m.Create(flags.Inputs, flags.Output, flags.Algorithms))
 		},
 	}
-	createCmd.Flags().StringSliceP("algo", "a", []string{"sha1"}, "Hash algorithms to use, multiple supported. Valid algorithms: md4, md5, ripemd160, sha1, sha224, sha256, sha384, sha512.")
+	createCmd.Flags().StringSliceP("algo", "a", []string{"sha1"}, "Hash algorithms to use, multiple supported. Supported algorithms: md4, md5, ripemd160, sha1, sha224, sha256, sha384, sha512.")
+	createCmd.Flags().StringSliceP("inputs", "i", []string{}, "Files/Directories to create checksum.")
+	createCmd.Flags().StringP("output", "o", "", "Directory to store the calculated checksum file(s).")
+	createCmd.Flags().StringSliceP("title", "t", []string{}, "Output file name. This will override program smart naming scheme.")
 	rootCmd.AddCommand(createCmd)
 
 	return rootCmd
 }
 
-// Struct HashFlags contains all flags used by Hash module.
-type HashFlags struct {
+// Struct ChecksumFlags contains all flags used by Checksum module.
+type ChecksumFlags struct {
 	Algorithms []string
+	Inputs     []string
+	Output     string
+	OutputName string
 }
 
 // Extract all flags from a Cobra Command.
-func ParseHashFlags(cmd *cobra.Command) *HashFlags {
+func ParseChecksumFlags(cmd *cobra.Command) *ChecksumFlags {
 	algorithms, _ := cmd.Flags().GetStringSlice("algo")
+	inputs, _ := cmd.Flags().GetStringSlice("inputs")
+	output, _ := cmd.Flags().GetString("output")
+	outputName, _ := cmd.Flags().GetString("title")
 
-	return &HashFlags{
+	return &ChecksumFlags{
 		Algorithms: algorithms,
+		Inputs:     inputs,
+		Output:     output,
+		OutputName: outputName,
 	}
 }
