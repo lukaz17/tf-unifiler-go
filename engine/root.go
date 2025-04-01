@@ -42,6 +42,7 @@ Licensed under GPL-3.0 license. See COPYING file along with this program for mor
 		Version: version(),
 	}
 	rootCmd.AddCommand(ChecksumCmd())
+	rootCmd.AddCommand(FileCmd())
 	rootCmd.AddCommand(MirrorCmd())
 
 	if err := rootCmd.Execute(); err != nil {

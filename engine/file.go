@@ -19,65 +19,63 @@ package engine
 import (
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"os"
 	"path"
+	"path/filepath"
 	"strconv"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
+	"github.com/spf13/cobra"
+	"github.com/tforce-io/tf-golib/opx"
 	"github.com/tforce-io/tf-golib/opx/slicext"
 	"github.com/tforce-io/tf-golib/strfmt"
-	"github.com/tforceaio/tf-unifiler-go/cmd"
 	"github.com/tforceaio/tf-unifiler-go/core"
 	"github.com/tforceaio/tf-unifiler-go/crypto/hasher"
 	"github.com/tforceaio/tf-unifiler-go/db"
-	"github.com/tforceaio/tf-unifiler-go/extension"
-	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 )
 
-type FileModule struct {
-	logger zerolog.Logger
-}
-
-func NewFileModule(c *Controller) *FileModule {
-	return &FileModule{
-		logger: c.ModuleLogger("File"),
-	}
-}
-
+// Struct FileRenameMapping stores old and new filename after renaming for rollback.
 type FileRenameMapping struct {
 	Source string `json:"s,omitempty"`
 	Target string `json:"t,omitempty"`
 }
 
-func (m *FileModule) File(args *cmd.FileCmd) {
-	if args.Delete != nil {
-		m.Scan((*cmd.FileScanCmd)(args.Delete), true)
-	} else if args.Rename != nil {
-		m.Rename(args.Rename)
-	} else if args.Scan != nil {
-		m.Scan(args.Scan, false)
-	} else {
-		m.logger.Error().Msg("Invalid arguments")
+// FileModule handles user requests related to batch processing of files in general.
+type FileModule struct {
+	logger zerolog.Logger
+}
+
+// Return new FileModule.
+func NewFileModule(c *Controller, cmdName string) *FileModule {
+	return &FileModule{
+		logger: c.CommandLogger("file", cmdName),
 	}
 }
 
-func (m *FileModule) Scan(args *cmd.FileScanCmd, delete bool) {
-	if len(args.Files) == 0 {
-		m.logger.Error().Msg("No input file")
-		return
+// Scan and compute hashes using common algorithms (MD5, SHA-1, SHA-256, SHA-512) for inputs (files/folders).
+// Mark them as obseleted if delete is true.
+func (m *FileModule) Hash(workspaceDir string, inputs, collections []string, delete bool) error {
+	if workspaceDir == "" {
+		return errors.New("workspace is not set")
+	} else if !filesystem.IsDirectoryExist(workspaceDir) {
+		return errors.New("workspace is not found")
+	}
+	if len(inputs) == 0 {
+		return errors.New("inputs is empty")
 	}
 	m.logger.Info().
-		Array("files", extension.StringSlice(args.Files)).
-		Msgf("Start deleting files")
+		Strs("collections", collections).
+		Bool("delete", delete).
+		Strs("files", inputs).
+		Msg("Start hashing files.")
 
-	contents, err := filesystem.List(args.Files, true)
+	contents, err := filesystem.List(inputs, true)
 	if err != nil {
-		m.logger.Err(err).Msg("Error listing input files")
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-		return
+		return err
 	}
 
 	hResults := []*core.FileMultiHash{}
@@ -88,11 +86,16 @@ func (m *FileModule) Scan(args *cmd.FileScanCmd, delete bool) {
 		}
 		fhResults, err := hasher.Hash(c.RelativePath, algos)
 		if err != nil {
-			m.logger.Err(err).Msgf("Error computing hash for '%s'", c.RelativePath)
-			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-			return
+			m.logger.Info().
+				Str("path", c.RelativePath).
+				Msg("Failed to compute hash.")
+			return err
 		}
-		m.logger.Info().Array("algos", extension.StringSlice(algos)).Int("size", fhResults[0].Size).Msgf("File hashed '%s'", c.RelativePath)
+		m.logger.Info().
+			Strs("algos", algos).
+			Str("path", c.RelativePath).
+			Int("size", fhResults[0].Size).
+			Msg("Hashed file.")
 		fileMultiHash := &core.FileMultiHash{
 			Md5:      fhResults[0].Hash,
 			Sha1:     fhResults[1].Hash,
@@ -103,17 +106,15 @@ func (m *FileModule) Scan(args *cmd.FileScanCmd, delete bool) {
 		}
 		hResults = append(hResults, fileMultiHash)
 	}
-	dbFile := filesystem.Join(args.Workspace, "metadata.db")
+
+	dbFile := FileWorkspaceDatabase(workspaceDir)
 	ctx, err := db.Connect(dbFile)
 	if err != nil {
-		m.logger.Err(err).Msg("Error while opening metadata database.")
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-		return
+		return err
 	}
-	err = m.saveHResults(ctx, hResults, delete, args.Collections)
+	err = m.saveHResults(ctx, hResults, delete, collections)
 	if err != nil {
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-		return
+		return err
 	}
 
 	if delete {
@@ -123,49 +124,60 @@ func (m *FileModule) Scan(args *cmd.FileScanCmd, delete bool) {
 			}
 			err = os.Remove(c.AbsolutePath)
 			if err != nil {
-				m.logger.Err(err).Str("Path", c.RelativePath).Msg("Error while deleting file.")
-				m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-				return
+				m.logger.Info().
+					Str("path", c.RelativePath).
+					Msg("Failed to delete file.")
+				return err
 			}
-			m.logger.Info().Str("Path", c.RelativePath).Msgf("File %q deleted", c.RelativePath)
+			m.logger.Info().
+				Str("path", c.RelativePath).
+				Msg("Deleted file.")
 		}
 	}
+
+	return nil
 }
 
-func (m *FileModule) Rename(args *cmd.FileRenameCmd) {
-	if len(args.Files) == 0 {
-		m.logger.Error().Msg("No input file")
-		return
+// Multi-rename files. Input which is directories will be ignored.
+func (m *FileModule) Rename(inputs []string, preset string) error {
+	if len(inputs) == 0 {
+		return errors.New("inputs is empty")
 	}
 	m.logger.Info().
-		Array("files", extension.StringSlice(args.Files)).
-		Str("preset", args.Preset).
-		Msgf("Start rename file")
+		Strs("inputs", inputs).
+		Str("preset", preset).
+		Msg("Start renaming file.")
 
-	if args.Preset == "md4" {
-		m.RenameByHash(args, args.Preset, "6d6434_")
+	if preset == "md4" {
+		return m.renameByHash(inputs, preset, "6d6434_")
 	}
-	if args.Preset == "md5" {
-		m.RenameByHash(args, args.Preset, "6d6435_")
+	if preset == "md5" {
+		return m.renameByHash(inputs, preset, "6d6435_")
 	}
-	if args.Preset == "sha1" {
-		m.RenameByHash(args, args.Preset, "73686131_")
+	if preset == "sha1" {
+		return m.renameByHash(inputs, preset, "73686131_")
 	}
-	if args.Preset == "sha256" {
-		m.RenameByHash(args, args.Preset, "736861323536_")
+	if preset == "sha256" {
+		return m.renameByHash(inputs, preset, "736861323536_")
 	}
-	if args.Preset == "sha512" {
-		m.RenameByHash(args, args.Preset, "736861353132_")
+	if preset == "sha512" {
+		return m.renameByHash(inputs, preset, "736861353132_")
 	}
+
+	return errors.New("preset is invalid")
 }
 
-func (m *FileModule) RenameByHash(args *cmd.FileRenameCmd, algo string, prefix string) {
-	contents, err := filesystem.List(args.Files, false)
-	if err != nil {
-		m.logger.Err(err).Msg("Error listing input files")
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-		return
+// Rename files using hashes of their contents.
+func (m *FileModule) renameByHash(inputs []string, algo string, prefix string) error {
+	if len(inputs) == 0 {
+		return errors.New("inputs is empty")
 	}
+
+	contents, err := filesystem.List(inputs, false)
+	if err != nil {
+		return err
+	}
+
 	files := []*filesystem.FsEntry{}
 	for _, c := range contents {
 		if !c.IsDir {
@@ -178,55 +190,91 @@ func (m *FileModule) RenameByHash(args *cmd.FileRenameCmd, algo string, prefix s
 			continue
 		}
 		fhResults, err := hasher.Hash(c.RelativePath, []string{algo})
-		m.logger.Info().Str("algo", algo).Int("size", fhResults[0].Size).Msgf("File hashed '%s'", c.RelativePath)
 		if err != nil {
-			m.logger.Err(err).Msgf("Error computing hash for '%s'", c.RelativePath)
-			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-			return
+			m.logger.Info().
+				Str("path", c.RelativePath).
+				Msg("Failed to compute hash.")
+			return err
 		}
+		m.logger.Info().
+			Str("algo", algo).
+			Str("path", c.RelativePath).
+			Int("size", fhResults[0].Size).
+			Msg("Hashed file.")
 		hResults = append(hResults, fhResults...)
 	}
+
 	mappings := []*FileRenameMapping{}
 	for _, e := range hResults {
 		parent := path.Dir(e.Path)
 		ext := path.Ext(e.Path)
 		targetName := prefix + hex.EncodeToString(e.Hash) + ext
-		target := generic.TernaryAssign(parent == ".", targetName, filesystem.Join(parent, targetName))
+		target := opx.Ternary(parent == ".", targetName, filesystem.Join(parent, targetName))
 		mapping := &FileRenameMapping{
 			Source: e.Path,
 			Target: target,
 		}
 		mappings = append(mappings, mapping)
 	}
+
 	currentTimestamp := time.Now().UnixMilli()
 	rollbackFilePath := filesystem.Join(".", "unifiler-file-rename-"+strconv.FormatInt(currentTimestamp, 10)+".json")
 	fContent, _ := json.Marshal(mappings)
 	fContents := []string{string(fContent)}
 	err = filesystem.WriteLines(rollbackFilePath, fContents)
 	if err == nil {
-		m.logger.Info().Msgf("Written %d line(s) to '%s'", len(fContents), rollbackFilePath)
+		m.logger.Info().
+			Int("lineCount", len(fContents)).
+			Str("path", rollbackFilePath).
+			Msg("Written rollback file.")
 	} else {
-		m.logger.Err(err).Msgf("Failed to write to '%s'", rollbackFilePath)
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
+		m.logger.Info().
+			Str("path", rollbackFilePath).
+			Msg("Failed to write rollback file.")
+		return err
 	}
+
 	for _, e := range mappings {
 		if e.Source == e.Target {
-			m.logger.Info().Str("src", e.Source).Str("target", e.Target).Msgf("Skip file '%s'", e.Source)
+			m.logger.Info().
+				Str("src", e.Source).
+				Str("dest", e.Target).
+				Msg("Skipped. File is already renamed.")
 			continue
 		}
 		if filesystem.IsFileExist(e.Target) {
-			m.logger.Error().Str("src", e.Source).Str("target", e.Target).Msgf("Cannot rename '%s'. Target file existed.", e.Source)
+			m.logger.Info().
+				Str("src", e.Source).
+				Str("dest", e.Target).
+				Msg("Skipped. Target file is existed.")
 			continue
 		}
 		err := os.Rename(e.Source, e.Target)
 		if err != nil {
-			m.logger.Err(err).Str("src", e.Source).Str("target", e.Target).Msgf("Cannot rename '%s'", e.Source)
+			m.logger.Err(err)
+			m.logger.Info().
+				Str("src", e.Source).
+				Str("dest", e.Target).
+				Msg("Failed to rename file.")
 			continue
 		}
-		m.logger.Info().Str("src", e.Source).Str("target", e.Target).Msgf("Renamed '%s'", e.Source)
+		m.logger.Info().
+			Str("src", e.Source).
+			Str("target", e.Target).
+			Msg("Renamed file.")
+	}
+
+	return nil
+}
+
+// Decorator to log error occurred when calling handlers.
+func (m *FileModule) logError(err error) {
+	if err != nil {
+		m.logger.Err(err).Msg("Unexpected error has occurred. Program will exit.")
 	}
 }
 
+// Save hashing results to metadata database along with their respective collections.
 func (m *FileModule) saveHResults(ctx *db.DbContext, hResults []*core.FileMultiHash, ignore bool, collections []string) (err error) {
 	// save Hash
 	hashes := make([]*db.Hash, len(hResults))
@@ -235,8 +283,8 @@ func (m *FileModule) saveHResults(ctx *db.DbContext, hResults []*core.FileMultiH
 	}
 	err = ctx.SaveHashes(hashes)
 	if err != nil {
-		m.logger.Err(err).Msg("Error while saving Hashes.")
-		return
+		m.logger.Info().Msg("Failed to save Hashes.")
+		return err
 	}
 	// save Mapping
 	sha256s := make([]string, len(hResults))
@@ -245,8 +293,8 @@ func (m *FileModule) saveHResults(ctx *db.DbContext, hResults []*core.FileMultiH
 	}
 	hashes, err = ctx.GetHashesBySha256s(sha256s)
 	if err != nil {
-		m.logger.Err(err).Msg("Error while reloading Hashes.")
-		return
+		m.logger.Info().Msg("Failed to reload Hashes.")
+		return err
 	}
 	hashesMap := map[string]uuid.UUID{}
 	for _, hash := range hashes {
@@ -259,8 +307,8 @@ func (m *FileModule) saveHResults(ctx *db.DbContext, hResults []*core.FileMultiH
 	}
 	err = ctx.SaveMappings(mappings)
 	if err != nil {
-		m.logger.Err(err).Msg("Error while saving Mappings.")
-		return
+		m.logger.Info().Msg("Failed to save Mappings.")
+		return err
 	}
 	if !slicext.IsEmpty(collections) {
 		// save Set
@@ -270,14 +318,14 @@ func (m *FileModule) saveHResults(ctx *db.DbContext, hResults []*core.FileMultiH
 		}
 		err = ctx.SaveSets(sets)
 		if err != nil {
-			m.logger.Err(err).Msg("Error while saving Sets.")
-			return
+			m.logger.Info().Msg("Failed to save Sets.")
+			return err
 		}
 		// save SetHash
 		sets, err = ctx.GetSetsByNames(collections)
 		if err != nil {
-			m.logger.Err(err).Msg("Error while reloading Sets.")
-			return
+			m.logger.Info().Msg("Failed to reload Sets.")
+			return err
 		}
 		setHashes := make([]*db.SetHash, len(sets)*len(hashes))
 		for i, set := range sets {
@@ -288,10 +336,84 @@ func (m *FileModule) saveHResults(ctx *db.DbContext, hResults []*core.FileMultiH
 		}
 		err = ctx.SaveSetHashes(setHashes)
 		if err != nil {
-			m.logger.Err(err).Msg("Error while saving SetHashes.")
-			return
+			m.logger.Info().Msg("Failed to save SetHashes.")
+			return err
 		}
 	}
-	m.logger.Info().Msg("All hashes saved successfully.")
-	return
+
+	m.logger.Info().Msg("Saved metadata successfully.")
+	return err
+}
+
+// Return database path to store File module's ouputs inside Unifiler workspace.
+func FileWorkspaceDatabase(workspaceDir string) string {
+	return filepath.Join(workspaceDir, ".unifiler", "metadata.db")
+}
+
+// Define Cobra Command for File module.
+func FileCmd() *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:   "file",
+		Short: "Batch file processing in general.",
+	}
+
+	hashCmd := &cobra.Command{
+		Use:   "hash",
+		Short: "Compute hashes for files using common algorithms (MD5, SHA-1, SHA-256, SHA-512).",
+		Run: func(cmd *cobra.Command, args []string) {
+			c := InitApp()
+			defer c.Close()
+			flags := ParseFileFlags(cmd)
+			m := NewFileModule(c, "hash")
+			m.logError(m.Hash(flags.WorkspaceDir, flags.Inputs, flags.Collections, flags.Deleted))
+		},
+	}
+	hashCmd.Flags().StringSliceP("collections", "c", []string{}, "Names of collections of known files. If a collection existed, files will be appended to that collection.")
+	hashCmd.Flags().Bool("delete", false, "Mark the inputs as obsoleted.")
+	hashCmd.Flags().StringSliceP("inputs", "i", []string{}, "Files/Directories to hash.")
+	hashCmd.Flags().StringP("workspace", "w", "", "Directory contains Unifiler workspace.")
+	rootCmd.AddCommand(hashCmd)
+
+	renameCmd := &cobra.Command{
+		Use:   "rename",
+		Short: "Rename multiples file using pre-defined settings.",
+		Run: func(cmd *cobra.Command, args []string) {
+			c := InitApp()
+			defer c.Close()
+			flags := ParseFileFlags(cmd)
+			m := NewFileModule(c, "rename")
+			m.logError(m.Rename(flags.Inputs, flags.Preset))
+		},
+	}
+	renameCmd.Flags().StringSliceP("inputs", "i", []string{}, "Files to rename. Directories will be ignored.")
+	renameCmd.Flags().StringP("preset", "p", "", "Name of pre-defined settings for renaming.")
+	rootCmd.AddCommand(renameCmd)
+
+	return rootCmd
+}
+
+// Struct FileFlags contains all flags used by File module.
+type FileFlags struct {
+	Collections  []string
+	Deleted      bool
+	Inputs       []string
+	Preset       string
+	WorkspaceDir string
+}
+
+// Extract all flags from a Cobra Command.
+func ParseFileFlags(cmd *cobra.Command) *FileFlags {
+	collections, _ := cmd.Flags().GetStringSlice("collections")
+	deleted, _ := cmd.Flags().GetBool("deleted")
+	inputs, _ := cmd.Flags().GetStringSlice("inputs")
+	preset, _ := cmd.Flags().GetString("preset")
+	workspaceDir, _ := cmd.Flags().GetString("workspace")
+
+	return &FileFlags{
+		Collections:  collections,
+		Deleted:      deleted,
+		Inputs:       inputs,
+		Preset:       preset,
+		WorkspaceDir: workspaceDir,
+	}
 }
