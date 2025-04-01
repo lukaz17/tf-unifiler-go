@@ -23,7 +23,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/tforceaio/tf-unifiler-go/extension/generic"
+	"github.com/tforce-io/tf-golib/opx"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 	"github.com/tforceaio/tf-unifiler-go/filesystem/exec"
 )
@@ -36,7 +36,7 @@ var gitCommit, gitDate, gitBranch string
 func version() string {
 	originDate := time.Date(2024, time.August, 13, 0, 0, 0, 0, time.UTC)
 	gitDate2, _ := time.Parse("20060102", gitDate)
-	buildDate := generic.TernaryAssign(gitDate == "", time.Now().UTC(), gitDate2)
+	buildDate := opx.Ternary(gitDate == "", time.Now().UTC(), gitDate2)
 	duration := buildDate.Sub(originDate)
 	minor := minorVersion
 	patch := strconv.Itoa(patchVersion)
@@ -72,7 +72,7 @@ func InitApp() *Controller {
 
 	cfg.Logger.Info().Msgf("TF UNIFILER v%s", version())
 	gitDate2, _ := time.Parse("20060102", gitDate)
-	buildDate := generic.TernaryAssign(gitDate == "", time.Now().UTC(), gitDate2)
+	buildDate := opx.Ternary(gitDate == "", time.Now().UTC(), gitDate2)
 	cfg.Logger.Info().Msgf("Copyright (C) %d T-Force I/O", buildDate.Year())
 	cfg.Logger.Info().Msg("Licensed under GPL-3.0 license. See COPYING file along with this program for more details.")
 	cfg.Logger.Info().Msgf("Working directory %s", pwd)

@@ -17,6 +17,7 @@
 package engine
 
 import (
+	"errors"
 	"fmt"
 	"math"
 	"math/big"
@@ -25,49 +26,40 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
-	"github.com/tforceaio/tf-unifiler-go/cmd"
+	"github.com/spf13/cobra"
+	"github.com/tforce-io/tf-golib/opx"
 	"github.com/tforceaio/tf-unifiler-go/config"
-	"github.com/tforceaio/tf-unifiler-go/extension/generic"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 	"github.com/tforceaio/tf-unifiler-go/filesystem/exec"
 	"github.com/tforceaio/tf-unifiler-go/x/nullable"
 )
 
+// VideoModule handles user requests related to batch processing of video files.
 type VideoModule struct {
 	cfg    *config.RootConfig
 	logger zerolog.Logger
 }
 
-func NewVideoModule(c *Controller) *VideoModule {
+// Return new VideoModule.
+func NewVideoModule(c *Controller, cmdName string) *VideoModule {
 	return &VideoModule{
 		cfg:    c.Root,
-		logger: c.ModuleLogger("Video"),
+		logger: c.CommandLogger("video", cmdName),
 	}
 }
 
-func (m *VideoModule) Video(args *cmd.VideoCmd) {
-	if args.Info != nil {
-		m.VideoInfo(args.Info)
-	} else if args.Screenshot != nil {
-		m.VideoScreenshot(args.Screenshot)
-	} else {
-		m.logger.Error().Msg("Invalid arguments")
-	}
-}
-
-func (m *VideoModule) VideoInfo(args *cmd.VideoInfoCmd) {
-	if args.File == "" {
-		m.logger.Error().Msg("No input file")
-		return
-	} else if !filesystem.IsFileExist(args.File) {
-		m.logger.Error().Str("path", args.File).Msg("Video file not found")
-		return
+// Analyze video file and store metadata in JSON format.
+func (m *VideoModule) Info(file string) error {
+	if file == "" {
+		return errors.New("input is not set")
+	} else if !filesystem.IsFileExist(file) {
+		return errors.New("input file not found")
 	}
 	m.logger.Info().
-		Str("file", args.File).
-		Msgf("Analyzing video file information")
+		Str("input", file).
+		Msg("Start analyzing file information.")
 
-	inputFile, _ := filesystem.GetAbsPath(args.File)
+	inputFile, _ := filesystem.GetAbsPath(file)
 	miFile := inputFile + ".mediainfo.json"
 	miOptions := &exec.MediaInfoOptions{
 		InputFile:    inputFile,
@@ -77,70 +69,70 @@ func (m *VideoModule) VideoInfo(args *cmd.VideoInfoCmd) {
 
 	stdout, err := exec.Run(m.cfg.Path.MediaInfoPath, exec.NewMediaInfoArgs(miOptions))
 	if err != nil {
-		m.logger.Err(err).Msg("Error analyzing video file information")
+		return err
 	}
 
-	m.logger.Info().Str("path", inputFile).Str("info", string(stdout)).Msg("Analyzed video file information")
-	m.logger.Info().Str("path", miFile).Msg("Log file created")
+	m.logger.Info().
+		Str("path", inputFile).
+		Msg("Analyzed video file.")
+	fmt.Println(stdout)
+	m.logger.Info().
+		Str("path", miFile).
+		Msg("Saved video info.")
+
+	return nil
 }
 
-func (m *VideoModule) VideoScreenshot(args *cmd.VideoScreenshotCmd) {
-	if args.File == "" {
-		m.logger.Error().Msg("No input file")
-		return
-	} else if !filesystem.IsFileExist(args.File) {
-		m.logger.Error().Str("path", args.File).Msg("Video file not found")
-		return
+// Take screenshots for videos file from offet of the video file, for a limit duration, every interval.
+// All time are in seconds. Quality factor range from 1-100.
+func (m *VideoModule) Screenshot(file string, interval, offset, limit float64, quality int, outputDir string) error {
+	if file == "" {
+		return errors.New("input is not set")
+	} else if !filesystem.IsFileExist(file) {
+		return errors.New("input file not found")
 	}
-	if args.Output == "" {
-		m.logger.Warn().Msg("Output directory is not set, the screenshots will be saved in same directory with media file")
-	} else {
-		if filesystem.IsFileExist(args.Output) {
-			m.logger.Error().Msg("A file with same name with output directory existed")
-			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-			return
-		}
+	if outputDir == "" {
+		m.logger.Warn().Msg("Output directory is not specified, screenshot will be saved in same directory as input.")
 	}
-	if args.Interval == 0 {
-		m.logger.Warn().Msg("Interval is not set, default value will be used")
+	if interval == 0 {
+		m.logger.Warn().Msg("Interval is not specified, default value will be used.")
 	}
-	if args.Quality == 0 {
-		m.logger.Warn().Msg("Quality is not set, default value will be used")
+	if quality == 0 {
+		m.logger.Warn().Msg("Quality is not specified, default value will be used.")
 	}
 	m.logger.Info().
-		Str("file", args.File).
-		Str("output", args.Output).
-		Msgf("Taking screenshot for video file")
+		Str("file", file).
+		Floats64("interval/offset/limit", []float64{interval, offset, limit}).
+		Str("output", outputDir).
+		Msg("Taking screenshot for video file.")
 
-	inputFile, _ := filesystem.CreateEntry(args.File)
+	inputFile, _ := filesystem.CreateEntry(file)
+	outputRoot := opx.Ternary(outputDir == "", path.Dir(inputFile.AbsolutePath), outputDir)
+	if filesystem.IsFileExist(outputRoot) {
+		return errors.New("a file with same name with target root existed")
+	}
 	miOptions := &exec.MediaInfoOptions{
 		InputFile:    inputFile.AbsolutePath,
 		OutputFormat: "JSON",
 	}
 	stdout, err := exec.Run(m.cfg.Path.MediaInfoPath, exec.NewMediaInfoArgs(miOptions))
 	if err != nil {
-		m.logger.Err(err).Msg("Error analyzing video file information")
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-		return
+		return err
 	}
 	fileMI, _ := exec.DecodeMediaInfoJson(stdout)
 
 	duration, err := strconv.ParseFloat(fileMI.Media.GeneralTracks[0].Duration, 64)
 	if err != nil {
-		m.logger.Err(err).Msg("Invalid video file duration")
-		m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-		return
+		m.logger.Warn().Msg("Invalid video file duration.")
+		return err
 	}
-	limit := generic.TernaryAssign(args.Limit == 0, duration, math.Min(duration, args.Limit))
-	limitMs := big.NewInt(int64(limit * float64(1000)))
+	limitF64 := opx.Ternary(limit == 0, duration, math.Min(duration, limit))
+	limitMs := big.NewInt(int64(limitF64 * float64(1000)))
 
-	outputRoot := generic.TernaryAssign(args.Output == "", path.Dir(inputFile.AbsolutePath), args.Output)
 	if !filesystem.IsDirectoryExist(outputRoot) {
 		err = filesystem.CreateDirectoryRecursive(outputRoot)
 		if err != nil {
-			m.logger.Err(err).Msg("Error creating output directory")
-			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-			return
+			return err
 		}
 	}
 
@@ -149,22 +141,22 @@ func (m *VideoModule) VideoScreenshot(args *cmd.VideoScreenshotCmd) {
 	// Reference https://web.archive.org/web/20190722004804/https://stevens.li/guides/video/converting-hdr-to-sdr-with-ffmpeg/
 	vfHDR := "zscale=t=linear:npl=100,format=gbrpf32le,zscale=p=bt709,tonemap=tonemap=hable:desat=0,zscale=t=bt709:m=bt709:r=tv,format=yuv420p"
 	if isHDR {
-		m.logger.Info().Str("param", vfHDR).Msg("The video is HDR, Unifiler will attempt to apply colorspace conversion")
+		m.logger.Info().Str("param", vfHDR).Msg("The video is HDR, Unifiler will attempt to apply colorspace conversion.")
 	}
 	offsetDef, intervalDef := m.DefaultScreenshotParameter(limitMs)
-	offset := generic.TernaryAssign(args.Offset == 0, offsetDef, big.NewInt(int64(args.Offset*1000)))
-	interval := generic.TernaryAssign(args.Interval == 0, intervalDef, big.NewInt(int64(args.Interval*1000)))
-	quality := generic.TernaryAssign(args.Quality == 0, 1, args.Quality)
-	outputFilenameFormat := generic.TernaryAssign(quality == 1, path.Join(outputRoot, inputFile.Name+"_%s"+".jpg"), path.Join(outputRoot, inputFile.Name+"_%s_q%d"+".jpg"))
-	for t := offset; t.Cmp(limitMs) <= 0; t = new(big.Int).Add(t, interval) {
-		outFile := generic.TernaryAssign(quality == 1, fmt.Sprintf(outputFilenameFormat, m.ConvertSecondToTimeCode(t)), fmt.Sprintf(outputFilenameFormat, m.ConvertSecondToTimeCode(t), quality))
+	offsetMs := opx.Ternary(offset == 0, offsetDef, big.NewInt(int64(offset*1000)))
+	intervalMs := opx.Ternary(interval == 0, intervalDef, big.NewInt(int64(interval*1000)))
+	qualityFactor := opx.Ternary(quality == 0, 1, quality)
+	outputFilenameFormat := opx.Ternary(quality == 1, path.Join(outputRoot, inputFile.Name+"_%s"+".jpg"), path.Join(outputRoot, inputFile.Name+"_%s_q%d"+".jpg"))
+	for t := offsetMs; t.Cmp(limitMs) <= 0; t = new(big.Int).Add(t, intervalMs) {
+		outFile := opx.Ternary(quality == 1, fmt.Sprintf(outputFilenameFormat, m.ConvertSecondToTimeCode(t)), fmt.Sprintf(outputFilenameFormat, m.ConvertSecondToTimeCode(t), quality))
 		ffmOptions := &exec.FFmpegArgsOptions{
 			InputFile:      inputFile.AbsolutePath,
 			InputStartTime: nullable.FromInt(int(t.Int64()) / 1000),
 
 			OutputFile:       outFile,
 			OutputFrameCount: nullable.FromInt(1),
-			QualityFactor:    nullable.FromInt(quality),
+			QualityFactor:    nullable.FromInt(qualityFactor),
 			OverwiteOutput:   true,
 		}
 		if isHDR {
@@ -173,26 +165,32 @@ func (m *VideoModule) VideoScreenshot(args *cmd.VideoScreenshotCmd) {
 
 		_, err := exec.Run(m.cfg.Path.FFMpegPath, exec.NewFFmpegArgs(ffmOptions))
 		if err != nil {
-			m.logger.Err(err).Msg("Error taking video file screenshot")
-			m.logger.Info().Msg("Unexpected error occurred. Exiting...")
-			return
+			m.logger.Info().Msg("Failed to take video screenshot.")
+			return err
 		}
-		log.Info().Float64("time", float64(t.Int64())/float64(1000)).Str("output", outFile).Msg("Created screenshot successfully")
+		log.Info().
+			Float64("time", float64(t.Int64())/float64(1000)).
+			Str("output", outFile).
+			Msg("Created screenshot.")
 	}
+
+	return nil
 }
 
-func (mod *VideoModule) ConvertSecondToTimeCode(msec *big.Int) string {
-	h := new(big.Int).Div(msec, big.NewInt(3600000))
-	msec = new(big.Int).Mod(msec, big.NewInt(3600000))
-	m := new(big.Int).Div(msec, big.NewInt(60000))
-	msec = new(big.Int).Mod(msec, big.NewInt(60000))
-	s := new(big.Int).Div(msec, big.NewInt(1000))
-	ms := new(big.Int).Mod(msec, big.NewInt(1000))
+// Return timecode string from timeMs in miliseconds.
+func (m *VideoModule) ConvertSecondToTimeCode(timeMs *big.Int) string {
+	hr := new(big.Int).Div(timeMs, big.NewInt(3600000))
+	timeMs = new(big.Int).Mod(timeMs, big.NewInt(3600000))
+	mm := new(big.Int).Div(timeMs, big.NewInt(60000))
+	timeMs = new(big.Int).Mod(timeMs, big.NewInt(60000))
+	sc := new(big.Int).Div(timeMs, big.NewInt(1000))
+	ms := new(big.Int).Mod(timeMs, big.NewInt(1000))
 
-	return fmt.Sprintf("%d_%02d_%02d_%03d", h.Int64(), m.Int64(), s.Int64(), ms.Int64())
+	return fmt.Sprintf("%d_%02d_%02d_%03d", hr.Int64(), mm.Int64(), sc.Int64(), ms.Int64())
 }
 
-func (mod *VideoModule) DefaultScreenshotParameter(msec *big.Int) (*big.Int, *big.Int) {
+// Return offset/interval paramteters for video with lengthMs in miliseconds.
+func (m *VideoModule) DefaultScreenshotParameter(lengthMs *big.Int) (*big.Int, *big.Int) {
 	defaults := []struct {
 		duration *big.Int
 		offset   *big.Int
@@ -205,9 +203,85 @@ func (mod *VideoModule) DefaultScreenshotParameter(msec *big.Int) (*big.Int, *bi
 		{big.NewInt(10800000), big.NewInt(2700), big.NewInt(12700)}, // 283 -> 850
 	}
 	for _, d := range defaults {
-		if msec.Cmp(d.duration) < 0 {
+		if lengthMs.Cmp(d.duration) < 0 {
 			return d.offset, d.interval
 		}
 	}
 	return big.NewInt(3400), big.NewInt(17100) // 631 -> max
+}
+
+// Decorator to log error occurred when calling handlers.
+func (m *VideoModule) logError(err error) {
+	if err != nil {
+		m.logger.Err(err).Msg("Unexpected error has occurred. Program will exit.")
+	}
+}
+
+// Define Cobra Command for Video module.
+func VideoCmd() *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:   "video",
+		Short: "Batch video files processing.",
+	}
+
+	info := &cobra.Command{
+		Use:   "info",
+		Short: "Analyze video file and store metadata in JSON format.",
+		Run: func(cmd *cobra.Command, args []string) {
+			c := InitApp()
+			defer c.Close()
+			flags := ParseVideoFlags(cmd)
+			m := NewVideoModule(c, "info")
+			m.logError(m.Info(flags.File))
+		},
+	}
+	info.Flags().StringP("file", "i", "", "Video file to generate info.")
+	rootCmd.AddCommand(info)
+
+	screenshot := &cobra.Command{
+		Use:   "screenshot",
+		Short: "Scan and compute hashes files/directories then create hardlink to workspace.",
+		Run: func(cmd *cobra.Command, args []string) {
+			c := InitApp()
+			defer c.Close()
+			flags := ParseVideoFlags(cmd)
+			m := NewVideoModule(c, "screenshot")
+			m.logError(m.Screenshot(flags.File, flags.Interval, flags.Offset, flags.Limit, flags.Quality, flags.OutputDir))
+		},
+	}
+	info.Flags().StringP("file", "i", "", "Video file to take screenshot.")
+	info.Flags().IntP("quality", "q", 90, "Quality factor for screenshot in scale 1-100.")
+	info.Flags().StringP("output", "o", "", "Directory to save screenshots.")
+	rootCmd.AddCommand(screenshot)
+
+	return rootCmd
+}
+
+// Struct VideoFlags contains all flags used by Video module.
+type VideoFlags struct {
+	File      string
+	Interval  float64
+	Limit     float64
+	Offset    float64
+	OutputDir string
+	Quality   int
+}
+
+// Extract all flags from a Cobra Command.
+func ParseVideoFlags(cmd *cobra.Command) *VideoFlags {
+	file, _ := cmd.Flags().GetString("file")
+	interval, _ := cmd.Flags().GetFloat64("interval")
+	limit, _ := cmd.Flags().GetFloat64("limit")
+	offset, _ := cmd.Flags().GetFloat64("offset")
+	outputDir, _ := cmd.Flags().GetString("output")
+	quality, _ := cmd.Flags().GetInt("quality")
+
+	return &VideoFlags{
+		File:      file,
+		Interval:  interval,
+		Limit:     limit,
+		Offset:    offset,
+		OutputDir: outputDir,
+		Quality:   quality,
+	}
 }

@@ -22,13 +22,13 @@ import (
 	"time"
 
 	"github.com/spf13/cobra"
-	"github.com/tforceaio/tf-unifiler-go/extension/generic"
+	"github.com/tforce-io/tf-golib/opx"
 )
 
 // Execute the program.
 func Execute() {
 	gitDate2, _ := time.Parse("20060102", gitDate)
-	buildDate := generic.TernaryAssign(gitDate == "", time.Now().UTC(), gitDate2)
+	buildDate := opx.Ternary(gitDate == "", time.Now().UTC(), gitDate2)
 
 	rootCmd := &cobra.Command{
 		Use: "unifiler",
@@ -44,6 +44,7 @@ Licensed under GPL-3.0 license. See COPYING file along with this program for mor
 	rootCmd.AddCommand(ChecksumCmd())
 	rootCmd.AddCommand(FileCmd())
 	rootCmd.AddCommand(MirrorCmd())
+	rootCmd.AddCommand(VideoCmd())
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
