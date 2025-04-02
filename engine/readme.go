@@ -14,10 +14,8 @@
 // You should have received a copy of the GNU General Public License
 // along with TF Unifiler. If not, see <https://www.gnu.org/licenses/>.
 
-package main
-
-import "github.com/tforceaio/tf-unifiler-go/engine"
-
-func main() {
-	engine.Execute()
-}
+/*
+Package engine is the core of the program. It wires up logic from other packages
+to handles request from users and delivers the result.
+*/
+package engine

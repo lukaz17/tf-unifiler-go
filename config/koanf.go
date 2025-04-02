@@ -30,11 +30,16 @@ import (
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 )
 
+// Singleton instance of configuration.
 var cfg *RootConfig
 
-func BuildConfig(f string) (*RootConfig, error) {
+// Initialize RootConfiguration follow the sequence:
+// Default values -> YML file (f) -> Environment variable.
+// The latter will override the former.
+// YML file will only be used if useFS is true.
+func BuildConfig(useFS bool, f string) (*RootConfig, error) {
 	k := defaultConfig()
-	if filesystem.IsFileExist(f) {
+	if useFS && filesystem.IsFileExist(f) {
 		k, _ = configFromYaml(k, f)
 	}
 	k, _ = configFromEnv(k)
@@ -44,11 +49,13 @@ func BuildConfig(f string) (*RootConfig, error) {
 	return &config, err
 }
 
-func InitKoanf() (*RootConfig, error) {
+// Entrypoint for creating RootConfiguration instance using Koanf.
+// YML file will only be used if useFS is true.
+func InitKoanf(useFS bool) (*RootConfig, error) {
 	if cfg != nil {
 		return cfg, nil
 	}
-	isPortable := IsPortable()
+	isPortable := !useFS || IsPortable()
 	configFile := "unifiler.yml"
 	if isPortable {
 		exec, _ := os.Executable()
@@ -62,7 +69,7 @@ func InitKoanf() (*RootConfig, error) {
 		configFile = path.Join(appData, "Unifiler", "unifiler.yml")
 	}
 	var err error
-	cfg, err = BuildConfig(configFile)
+	cfg, err = BuildConfig(useFS, configFile)
 	if err != nil {
 		return cfg, err
 	}
@@ -73,6 +80,7 @@ func InitKoanf() (*RootConfig, error) {
 	return cfg, nil
 }
 
+// Detect whether the app is running in portable mode.
 func IsPortable() bool {
 	exec, _ := os.Executable()
 	exec, _ = filesystem.GetAbsPath(exec)
@@ -80,6 +88,7 @@ func IsPortable() bool {
 	return filesystem.IsFileExist(portableFile)
 }
 
+// Returns default values for RootConfig
 func defaultConfig() *koanf.Koanf {
 	var k = koanf.New(".")
 
@@ -99,6 +108,7 @@ func defaultConfig() *koanf.Koanf {
 	return k
 }
 
+// Override existing values in Koanf instance with value from environtment variables.
 func configFromEnv(k *koanf.Koanf) (*koanf.Koanf, error) {
 	err := k.Load(env.Provider("UNIFILER_", ".", func(s string) string {
 		return strings.Replace(
@@ -111,6 +121,7 @@ func configFromEnv(k *koanf.Koanf) (*koanf.Koanf, error) {
 	return k, nil
 }
 
+// Override existing values in Koanf instance with value from YAML file.
 func configFromYaml(k *koanf.Koanf, f string) (*koanf.Koanf, error) {
 	err := k.Load(file.Provider(f), yaml.Parser())
 	if err != nil {

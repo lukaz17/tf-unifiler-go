@@ -14,11 +14,22 @@
 // You should have received a copy of the GNU General Public License
 // along with TF Unifiler. If not, see <https://www.gnu.org/licenses/>.
 
-package generic
+package config
 
-func TernaryAssign[T any](cond bool, vtrue, vfalse T) T {
-	if cond {
-		return vtrue
-	}
-	return vfalse
+// Struct RootConfig contains all available configurations.
+type RootConfig struct {
+	ConfigDir  string
+	ConfigFile string
+	IsPortable bool
+	Path       *PathConfig `koanf:"paths"`
+}
+
+// Struct PathConfig contains configurations related for external dependencies
+// location.
+type PathConfig struct {
+	FFMpegPath      string `koanf:"ffmpeg"`
+	ImageMagickPath string `koanf:"imagemagick"`
+	MediaInfoPath   string `koanf:"mediainfo"`
+	X264Path        string `koanf:"x264"`
+	X265Path        string `koanf:"x265"`
 }
