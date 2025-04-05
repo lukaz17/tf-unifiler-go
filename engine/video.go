@@ -224,7 +224,7 @@ func VideoCmd() *cobra.Command {
 		Short: "Batch video files processing.",
 	}
 
-	info := &cobra.Command{
+	infoCmd := &cobra.Command{
 		Use:   "info",
 		Short: "Analyze video file and store metadata in JSON format.",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -235,10 +235,10 @@ func VideoCmd() *cobra.Command {
 			m.logError(m.Info(flags.File))
 		},
 	}
-	info.Flags().StringP("file", "i", "", "Video file to generate info.")
-	rootCmd.AddCommand(info)
+	infoCmd.Flags().StringP("file", "i", "", "Video file to generate info.")
+	rootCmd.AddCommand(infoCmd)
 
-	screenshot := &cobra.Command{
+	screenshotCmd := &cobra.Command{
 		Use:   "screenshot",
 		Short: "Scan and compute hashes files/directories then create hardlink to workspace.",
 		Run: func(cmd *cobra.Command, args []string) {
@@ -249,10 +249,10 @@ func VideoCmd() *cobra.Command {
 			m.logError(m.Screenshot(flags.File, flags.Interval, flags.Offset, flags.Limit, flags.Quality, flags.OutputDir))
 		},
 	}
-	info.Flags().StringP("file", "i", "", "Video file to take screenshot.")
-	info.Flags().IntP("quality", "q", 90, "Quality factor for screenshot in scale 1-100.")
-	info.Flags().StringP("output", "o", "", "Directory to save screenshots.")
-	rootCmd.AddCommand(screenshot)
+	screenshotCmd.Flags().StringP("file", "i", "", "Video file to take screenshot.")
+	screenshotCmd.Flags().IntP("quality", "q", 90, "Quality factor for screenshot in scale 1-100.")
+	screenshotCmd.Flags().StringP("output", "o", "", "Directory to save screenshots.")
+	rootCmd.AddCommand(screenshotCmd)
 
 	return rootCmd
 }

@@ -24,7 +24,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/tforceaio/tf-unifiler-go/extension/generic"
+	"github.com/tforce-io/tf-golib/opx"
 )
 
 type FsEntry struct {
@@ -149,7 +149,7 @@ func List(fPaths []string, recursive bool) (FsEntries, error) {
 		}
 		contents[i] = entry
 	}
-	maxDepth := generic.TernaryAssign(recursive, -1, 1)
+	maxDepth := opx.Ternary(recursive, -1, 1)
 	if recursive {
 		var err error
 		contents, err = listEntries(contents, maxDepth, 0)
