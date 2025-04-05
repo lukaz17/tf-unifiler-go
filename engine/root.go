@@ -43,6 +43,7 @@ Licensed under GPL-3.0 license. See COPYING file along with this program for mor
 	}
 	rootCmd.AddCommand(ChecksumCmd())
 	rootCmd.AddCommand(FileCmd())
+	rootCmd.AddCommand(MetadataCmd())
 	rootCmd.AddCommand(MirrorCmd())
 	rootCmd.AddCommand(VideoCmd())
 
