@@ -31,6 +31,8 @@ type Hash struct {
 	Size        uint32 `gorm:"column:size"`
 	Description string `gorm:"column:description"`
 	IsIgnored   bool   `gorm:"column:is_ignored"`
+
+	SessionID uuid.UUID `gorm:"session_id"`
 }
 
 func NewHash(fileHashes *core.FileMultiHash, isIgnored bool) *Hash {
@@ -143,7 +145,7 @@ func (ctx *DbContext) writeHashes(newHashes []*Hash, changedHashes []*Hash) erro
 	for _, hash := range newHashes {
 		if hash.ID == uuid.Nil {
 			var err error
-			hash.ID, err = uuid.NewV7()
+			hash.ID, err = uuid.NewRandom()
 			if err != nil {
 				return err
 			}
@@ -165,6 +167,7 @@ func (ctx *DbContext) writeHashes(newHashes []*Hash, changedHashes []*Hash) erro
 				"size":        hash.Size,
 				"description": hash.Description,
 				"is_ignored":  hash.IsIgnored,
+				"session_id":  hash.SessionID,
 			})
 		if result.Error != nil {
 			tx.Rollback()

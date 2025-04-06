@@ -19,6 +19,7 @@ package engine
 import (
 	"errors"
 	"path/filepath"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -121,10 +122,23 @@ func (m *MetadataModule) logError(err error) {
 
 // Save hashing results to metadata database along with their respective collections.
 func (m *MetadataModule) saveHResults(ctx *db.DbContext, hResults []*core.FileMultiHash, ignore bool, collections []string) (err error) {
+	sessionID, err := uuid.NewV7()
+	if err != nil {
+		m.logger.Info().Msg("Failed to generate SessionID.")
+		return err
+	}
+	// save Session
+	session := db.NewSession(sessionID, time.Now().UTC())
+	err = ctx.SaveSessions([]*db.Session{session})
+	if err != nil {
+		m.logger.Info().Msg("Failed to save Sessions.")
+		return err
+	}
 	// save Hash
 	hashes := make([]*db.Hash, len(hResults))
 	for i, res := range hResults {
 		hashes[i] = db.NewHash(res, ignore)
+		hashes[i].SessionID = sessionID
 	}
 	err = ctx.SaveHashes(hashes)
 	if err != nil {
@@ -149,6 +163,7 @@ func (m *MetadataModule) saveHResults(ctx *db.DbContext, hResults []*core.FileMu
 	for i, res := range hResults {
 		fileName := strfmt.NewFileNameFromStr(res.FileName)
 		mappings[i] = db.NewMapping(hashesMap[res.Sha256.HexStr()], fileName.Name, fileName.Extension)
+		mappings[i].SessionID = sessionID
 	}
 	err = ctx.SaveMappings(mappings)
 	if err != nil {
@@ -160,6 +175,7 @@ func (m *MetadataModule) saveHResults(ctx *db.DbContext, hResults []*core.FileMu
 		sets := make([]*db.Set, len(collections))
 		for i, name := range collections {
 			sets[i] = db.NewSet(name)
+			sets[i].SessionID = sessionID
 		}
 		err = ctx.SaveSets(sets)
 		if err != nil {
@@ -177,6 +193,7 @@ func (m *MetadataModule) saveHResults(ctx *db.DbContext, hResults []*core.FileMu
 			hashesLen := len(hashes)
 			for j, hash := range hashes {
 				setHashes[i*hashesLen+j] = db.NewSetHash(set.ID, hash.ID)
+				setHashes[i*hashesLen+j].SessionID = sessionID
 			}
 		}
 		err = ctx.SaveSetHashes(setHashes)

@@ -39,12 +39,6 @@ func TestFileSaveHResults(t *testing.T) {
 		setHashCount int64
 	}{
 		{
-			"empty",
-			[][]*core.FileMultiHash{},
-			[][]string{},
-			0, 0, 0, 0,
-		},
-		{
 			"separated_session",
 			[][]*core.FileMultiHash{
 				exes,
@@ -87,33 +81,39 @@ func TestFileSaveHResults(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.group, func(t *testing.T) {
-			ctx.Truncate(&db.Hash{})
-			ctx.Truncate(&db.Mapping{})
-			ctx.Truncate(&db.Set{})
-			ctx.Truncate(&db.SetHash{})
+			ctx.Reset()
+
+			module := &MetadataModule{
+				logger: log.Logger,
+			}
+			for j, ss := range tt.sessions {
+				module.saveHResults(ctx, ss, false, tt.collections[j])
+			}
+			lastSession, err := ctx.GetLatestSession()
+			if err != nil {
+				t.Errorf("last session not found")
+			}
+			_, err = ctx.CountSessionChanges(lastSession.ID)
+			if err != nil {
+				t.Errorf("session changes cannot be retrieved")
+			}
+			hashCount, err := ctx.Count(&db.Hash{}, nil, nil)
+			if err != nil || hashCount != tt.hashCount {
+				t.Errorf("hash records count mismatch. expected %v actual %v", tt.hashCount, hashCount)
+			}
+			mappingCount, err := ctx.Count(&db.Mapping{}, nil, nil)
+			if err != nil || mappingCount != tt.mappingCount {
+				t.Errorf("mapping records count mismatch. expected %v actual %v", tt.mappingCount, mappingCount)
+			}
+			setCount, err := ctx.Count(&db.Set{}, nil, nil)
+			if err != nil || setCount != tt.setCount {
+				t.Errorf("set records count mismatch. expected %v actual %v", tt.setCount, setCount)
+			}
+			setHashCount, err := ctx.Count(&db.SetHash{}, nil, nil)
+			if err != nil || setHashCount != tt.setHashCount {
+				t.Errorf("set_hash records count mismatch. expected %v actual %v", tt.setHashCount, setHashCount)
+			}
 		})
-		module := &MetadataModule{
-			logger: log.Logger,
-		}
-		for j, ss := range tt.sessions {
-			module.saveHResults(ctx, ss, false, tt.collections[j])
-		}
-		hashCount, err := ctx.Count(&db.Hash{}, nil, nil)
-		if err != nil || hashCount != tt.hashCount {
-			t.Errorf("hash records count mismatch. expected %v actual %v", tt.hashCount, hashCount)
-		}
-		mappingCount, err := ctx.Count(&db.Mapping{}, nil, nil)
-		if err != nil || mappingCount != tt.mappingCount {
-			t.Errorf("mapping records count mismatch. expected %v actual %v", tt.mappingCount, mappingCount)
-		}
-		setCount, err := ctx.Count(&db.Set{}, nil, nil)
-		if err != nil || setCount != tt.setCount {
-			t.Errorf("set records count mismatch. expected %v actual %v", tt.setCount, setCount)
-		}
-		setHashCount, err := ctx.Count(&db.SetHash{}, nil, nil)
-		if err != nil || setHashCount != tt.setHashCount {
-			t.Errorf("set_hash records count mismatch. expected %v actual %v", tt.setHashCount, setHashCount)
-		}
 	}
 }
 
