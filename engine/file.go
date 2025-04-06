@@ -22,19 +22,13 @@ import (
 	"errors"
 	"os"
 	"path"
-	"path/filepath"
 	"strconv"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/tforce-io/tf-golib/opx"
-	"github.com/tforce-io/tf-golib/opx/slicext"
-	"github.com/tforce-io/tf-golib/strfmt"
-	"github.com/tforceaio/tf-unifiler-go/core"
 	"github.com/tforceaio/tf-unifiler-go/crypto/hasher"
-	"github.com/tforceaio/tf-unifiler-go/db"
 	"github.com/tforceaio/tf-unifiler-go/filesystem"
 )
 
@@ -56,20 +50,13 @@ func NewFileModule(c *Controller, cmdName string) *FileModule {
 	}
 }
 
-// Scan and compute hashes using common algorithms (MD5, SHA-1, SHA-256, SHA-512) for inputs (files/folders).
-// Mark them as obseleted if delete is true.
-func (m *FileModule) Hash(workspaceDir string, inputs, collections []string, delete bool) error {
-	if workspaceDir == "" {
-		return errors.New("workspace is not set")
-	} else if !filesystem.IsDirectoryExist(workspaceDir) {
-		return errors.New("workspace is not found")
-	}
+// Compute hashes using common algorithms (MD5, SHA-1, SHA-256, SHA-512) for inputs (files/folders),
+// then print the result to console.
+func (m *FileModule) Hash(inputs []string) error {
 	if len(inputs) == 0 {
 		return errors.New("inputs is empty")
 	}
 	m.logger.Info().
-		Strs("collections", collections).
-		Bool("delete", delete).
 		Strs("files", inputs).
 		Msg("Start hashing files.")
 
@@ -78,7 +65,6 @@ func (m *FileModule) Hash(workspaceDir string, inputs, collections []string, del
 		return err
 	}
 
-	hResults := []*core.FileMultiHash{}
 	algos := []string{"md5", "sha1", "sha256", "sha512"}
 	for _, c := range contents {
 		if c.IsDir {
@@ -92,47 +78,13 @@ func (m *FileModule) Hash(workspaceDir string, inputs, collections []string, del
 			return err
 		}
 		m.logger.Info().
-			Strs("algos", algos).
+			Str("md5", hex.EncodeToString(fhResults[0].Hash)).
 			Str("path", c.RelativePath).
+			Str("sha1", hex.EncodeToString(fhResults[1].Hash)).
+			Str("sha256", hex.EncodeToString(fhResults[2].Hash)).
+			Str("sha512", hex.EncodeToString(fhResults[3].Hash)).
 			Int("size", fhResults[0].Size).
 			Msg("Hashed file.")
-		fileMultiHash := &core.FileMultiHash{
-			Md5:      fhResults[0].Hash,
-			Sha1:     fhResults[1].Hash,
-			Sha256:   fhResults[2].Hash,
-			Sha512:   fhResults[3].Hash,
-			Size:     uint32(fhResults[0].Size),
-			FileName: c.Name,
-		}
-		hResults = append(hResults, fileMultiHash)
-	}
-
-	dbFile := FileWorkspaceDatabase(workspaceDir)
-	ctx, err := db.Connect(dbFile)
-	if err != nil {
-		return err
-	}
-	err = m.saveHResults(ctx, hResults, delete, collections)
-	if err != nil {
-		return err
-	}
-
-	if delete {
-		for _, c := range contents {
-			if c.IsDir {
-				continue
-			}
-			err = os.Remove(c.AbsolutePath)
-			if err != nil {
-				m.logger.Info().
-					Str("path", c.RelativePath).
-					Msg("Failed to delete file.")
-				return err
-			}
-			m.logger.Info().
-				Str("path", c.RelativePath).
-				Msg("Deleted file.")
-		}
 	}
 
 	return nil
@@ -274,82 +226,6 @@ func (m *FileModule) logError(err error) {
 	}
 }
 
-// Save hashing results to metadata database along with their respective collections.
-func (m *FileModule) saveHResults(ctx *db.DbContext, hResults []*core.FileMultiHash, ignore bool, collections []string) (err error) {
-	// save Hash
-	hashes := make([]*db.Hash, len(hResults))
-	for i, res := range hResults {
-		hashes[i] = db.NewHash(res, ignore)
-	}
-	err = ctx.SaveHashes(hashes)
-	if err != nil {
-		m.logger.Info().Msg("Failed to save Hashes.")
-		return err
-	}
-	// save Mapping
-	sha256s := make([]string, len(hResults))
-	for i, res := range hResults {
-		sha256s[i] = res.Sha256.HexStr()
-	}
-	hashes, err = ctx.GetHashesBySha256s(sha256s)
-	if err != nil {
-		m.logger.Info().Msg("Failed to reload Hashes.")
-		return err
-	}
-	hashesMap := map[string]uuid.UUID{}
-	for _, hash := range hashes {
-		hashesMap[hash.Sha256] = hash.ID
-	}
-	mappings := make([]*db.Mapping, len(hResults))
-	for i, res := range hResults {
-		fileName := strfmt.NewFileNameFromStr(res.FileName)
-		mappings[i] = db.NewMapping(hashesMap[res.Sha256.HexStr()], fileName.Name, fileName.Extension)
-	}
-	err = ctx.SaveMappings(mappings)
-	if err != nil {
-		m.logger.Info().Msg("Failed to save Mappings.")
-		return err
-	}
-	if !slicext.IsEmpty(collections) {
-		// save Set
-		sets := make([]*db.Set, len(collections))
-		for i, name := range collections {
-			sets[i] = db.NewSet(name)
-		}
-		err = ctx.SaveSets(sets)
-		if err != nil {
-			m.logger.Info().Msg("Failed to save Sets.")
-			return err
-		}
-		// save SetHash
-		sets, err = ctx.GetSetsByNames(collections)
-		if err != nil {
-			m.logger.Info().Msg("Failed to reload Sets.")
-			return err
-		}
-		setHashes := make([]*db.SetHash, len(sets)*len(hashes))
-		for i, set := range sets {
-			hashesLen := len(hashes)
-			for j, hash := range hashes {
-				setHashes[i*hashesLen+j] = db.NewSetHash(set.ID, hash.ID)
-			}
-		}
-		err = ctx.SaveSetHashes(setHashes)
-		if err != nil {
-			m.logger.Info().Msg("Failed to save SetHashes.")
-			return err
-		}
-	}
-
-	m.logger.Info().Msg("Saved metadata successfully.")
-	return err
-}
-
-// Return database path to store File module's ouputs inside Unifiler workspace.
-func FileWorkspaceDatabase(workspaceDir string) string {
-	return filepath.Join(workspaceDir, ".unifiler", "metadata.db")
-}
-
 // Define Cobra Command for File module.
 func FileCmd() *cobra.Command {
 	rootCmd := &cobra.Command{
@@ -365,13 +241,10 @@ func FileCmd() *cobra.Command {
 			defer c.Close()
 			flags := ParseFileFlags(cmd)
 			m := NewFileModule(c, "hash")
-			m.logError(m.Hash(flags.WorkspaceDir, flags.Inputs, flags.Collections, flags.Deleted))
+			m.logError(m.Hash(flags.Inputs))
 		},
 	}
-	hashCmd.Flags().StringSliceP("collections", "c", []string{}, "Names of collections of known files. If a collection existed, files will be appended to that collection.")
-	hashCmd.Flags().Bool("delete", false, "Mark the inputs as obsoleted.")
 	hashCmd.Flags().StringSliceP("inputs", "i", []string{}, "Files/Directories to hash.")
-	hashCmd.Flags().StringP("workspace", "w", "", "Directory contains Unifiler workspace.")
 	rootCmd.AddCommand(hashCmd)
 
 	renameCmd := &cobra.Command{
@@ -394,26 +267,17 @@ func FileCmd() *cobra.Command {
 
 // Struct FileFlags contains all flags used by File module.
 type FileFlags struct {
-	Collections  []string
-	Deleted      bool
-	Inputs       []string
-	Preset       string
-	WorkspaceDir string
+	Inputs []string
+	Preset string
 }
 
 // Extract all flags from a Cobra Command.
 func ParseFileFlags(cmd *cobra.Command) *FileFlags {
-	collections, _ := cmd.Flags().GetStringSlice("collections")
-	deleted, _ := cmd.Flags().GetBool("deleted")
 	inputs, _ := cmd.Flags().GetStringSlice("inputs")
 	preset, _ := cmd.Flags().GetString("preset")
-	workspaceDir, _ := cmd.Flags().GetString("workspace")
 
 	return &FileFlags{
-		Collections:  collections,
-		Deleted:      deleted,
-		Inputs:       inputs,
-		Preset:       preset,
-		WorkspaceDir: workspaceDir,
+		Inputs: inputs,
+		Preset: preset,
 	}
 }

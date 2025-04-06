@@ -92,7 +92,7 @@ func TestFileSaveHResults(t *testing.T) {
 			ctx.Truncate(&db.Set{})
 			ctx.Truncate(&db.SetHash{})
 		})
-		module := &FileModule{
+		module := &MetadataModule{
 			logger: log.Logger,
 		}
 		for j, ss := range tt.sessions {
