@@ -66,20 +66,7 @@ func (c *DbContext) GetHashesBySetIDs(setIDs uuid.UUIDs) ([]*Hash, error) {
 
 // Get Hashes belong to Sets by Set Names and their SHA-256s.
 func (c *DbContext) GetHashesInSets(sets, sha256s []string, onlyIgnored bool) ([]*Hash, error) {
-	hashes, err := c.findHashesInSets(sets, sha256s)
-	if err != nil {
-		return nil, err
-	}
-	if onlyIgnored {
-		newHashes := []*Hash{}
-		for _, hash := range hashes {
-			if hash.IsIgnored {
-				newHashes = append(newHashes, hash)
-			}
-		}
-		return newHashes, nil
-	}
-	return hashes, nil
+	return c.findHashesInSets(sets, sha256s, onlyIgnored)
 }
 
 // Get Hashes by their SHA-256s.
@@ -162,11 +149,16 @@ func (c *DbContext) findHashesBySetIDs(setIDs uuid.UUIDs) ([]*Hash, error) {
 }
 
 // Return Hashes that belong to Sets that have specified setNames and have specified SHA-256s.
-func (c *DbContext) findHashesInSets(setNames, sha256s []string) ([]*Hash, error) {
+func (c *DbContext) findHashesInSets(setNames, sha256s []string, onlyIgnored bool) ([]*Hash, error) {
 	var docs []*Hash
 	result := c.db.Model(&Hash{}).
-		InnerJoins("hashes ON hashes.id = set_hashes.hash_id AND sets ON set_hashes.set_id = sets.id").
-		Where("sets.name IN ? AND hashes.sha256 IN", setNames, sha256s).
+		Joins("JOIN set_hashes ON hashes.id = set_hashes.hash_id").
+		Joins("JOIN sets ON set_hashes.set_id = sets.id").
+		Where("(0 = ? OR sets.name IN ?) AND (0 = ? OR hashes.sha256 IN ?) AND (? OR hashes.is_ignored)",
+			len(setNames), setNames,
+			len(sha256s), sha256s,
+			!onlyIgnored, onlyIgnored,
+		).
 		Find(&docs)
 	return docs, result.Error
 }

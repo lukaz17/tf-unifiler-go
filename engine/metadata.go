@@ -206,6 +206,33 @@ func (m *MetadataModule) Scan(workspaceDir string, inputs, collections []string,
 	return nil
 }
 
+// Query Hash data.
+func (m *MetadataModule) QueryHash(workspaceDir string, collections, sha256s []string, obsoleted bool) error {
+	if workspaceDir == "" {
+		return errors.New("workspace is not set")
+	} else if !filesystem.IsDirectoryExist(workspaceDir) {
+		return errors.New("workspace is not found")
+	}
+
+	dbFile := MetadataWorkspaceDatabase(workspaceDir)
+	ctx, err := db.Connect(dbFile)
+	if err != nil {
+		return err
+	}
+
+	hashes, err := ctx.GetHashesInSets(collections, sha256s, obsoleted)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("RESULTS")
+	for i, h := range hashes {
+		fmt.Println(i+1, h.Sha256, "/", h.Md5, "/", h.Sha1, "/", h.Description)
+	}
+
+	return nil
+}
+
 // Query Session data.
 func (m *MetadataModule) QuerySession(workspaceDir string, sessionID string) error {
 	if workspaceDir == "" {
@@ -411,6 +438,23 @@ func metadataQueryCmd() *cobra.Command {
 		Short: "Query metadata database.",
 	}
 
+	hashCmd := &cobra.Command{
+		Use:   "hash",
+		Short: "Query hash information.",
+		Run: func(cmd *cobra.Command, args []string) {
+			c := InitApp()
+			defer c.Close()
+			flags := ParseMetadataFlags(cmd)
+			m := NewMetadataModule(c, "query_hash")
+			m.logError(m.QueryHash(flags.WorkspaceDir, flags.Collections, flags.Hashes, flags.OnlyObsoleted))
+		},
+	}
+	hashCmd.Flags().StringSliceP("collections", "c", []string{}, "Names of collections of known files.")
+	hashCmd.Flags().StringSliceP("hashes", "v", []string{}, "SHA-256s of known files.")
+	hashCmd.Flags().BoolP("obsoleted", "o", false, "Only match obsoleted files.")
+	hashCmd.Flags().StringP("workspace", "w", "", "Directory contains Unifiler workspace.")
+	queryCmd.AddCommand(hashCmd)
+
 	sessionCmd := &cobra.Command{
 		Use:   "session",
 		Short: "Query session information.",
@@ -434,6 +478,7 @@ type MetadataFlags struct {
 	Collections   []string
 	Deleted       bool
 	Erase         bool
+	Hashes        []string
 	ID            string
 	Inputs        []string
 	Invert        bool
@@ -446,6 +491,7 @@ func ParseMetadataFlags(cmd *cobra.Command) *MetadataFlags {
 	collections, _ := cmd.Flags().GetStringSlice("collections")
 	deleted, _ := cmd.Flags().GetBool("deleted")
 	erase, _ := cmd.Flags().GetBool("erase")
+	hashes, _ := cmd.Flags().GetStringSlice("hashes")
 	id, _ := cmd.Flags().GetString("id")
 	inputs, _ := cmd.Flags().GetStringSlice("inputs")
 	invert, _ := cmd.Flags().GetBool("invert")
@@ -456,6 +502,7 @@ func ParseMetadataFlags(cmd *cobra.Command) *MetadataFlags {
 		Collections:   collections,
 		Deleted:       deleted,
 		Erase:         erase,
+		Hashes:        hashes,
 		ID:            id,
 		Inputs:        inputs,
 		Invert:        invert,
