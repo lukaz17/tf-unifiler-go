@@ -17,13 +17,16 @@
 package engine
 
 import (
+	"encoding/hex"
 	"errors"
+	"os"
 	"path/filepath"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
+	"github.com/tforce-io/tf-golib/opx"
 	"github.com/tforce-io/tf-golib/opx/slicext"
 	"github.com/tforce-io/tf-golib/strfmt"
 	"github.com/tforceaio/tf-unifiler-go/core"
@@ -42,6 +45,95 @@ func NewMetadataModule(c *Controller, cmdName string) *MetadataModule {
 	return &MetadataModule{
 		logger: c.CommandLogger("metadata", cmdName),
 	}
+}
+
+// Compute hashes of inputs (files/folders) and refining their contents.
+// All files in collections are used by default for matching, onlyObsoleted will use obsoleted files only.
+// Invert will match non-existed files in database instead.
+// Erase will delete the file directly instead of moving them.
+func (m *MetadataModule) Refine(workspaceDir string, inputs, collections []string, onlyObsoleted, invert, erase bool) error {
+	if workspaceDir == "" {
+		return errors.New("workspace is not set")
+	} else if !filesystem.IsDirectoryExist(workspaceDir) {
+		return errors.New("workspace is not found")
+	}
+	if len(inputs) == 0 {
+		return errors.New("inputs is empty")
+	}
+	m.logger.Info().
+		Strs("collections", collections).
+		Bool("erase", erase).
+		Strs("files", inputs).
+		Bool("invert", invert).
+		Bool("onlyObsoleted", onlyObsoleted).
+		Str("workspace", workspaceDir).
+		Msg("Start refining file system.")
+
+	contents, err := filesystem.List(inputs, true)
+	if err != nil {
+		return err
+	}
+	dbFile := MetadataWorkspaceDatabase(workspaceDir)
+	ctx, err := db.Connect(dbFile)
+	if err != nil {
+		return err
+	}
+
+	algos := []string{"md5", "sha1", "sha256", "sha512"}
+	for _, c := range contents {
+		if c.IsDir {
+			continue
+		}
+		fhResults, err := hasher.Hash(c.RelativePath, algos)
+		if err != nil {
+			m.logger.Info().
+				Str("path", c.RelativePath).
+				Msg("Failed to compute hash.")
+			return err
+		}
+		sha256 := hex.EncodeToString(fhResults[2].Hash)
+		m.logger.Info().
+			Str("md5", hex.EncodeToString(fhResults[0].Hash)).
+			Str("path", c.RelativePath).
+			Str("sha1", hex.EncodeToString(fhResults[1].Hash)).
+			Str("sha256", sha256).
+			Int("size", fhResults[0].Size).
+			Msg("Hashed file.")
+		metadatas, err := ctx.GetHashesInSets(collections, []string{sha256}, onlyObsoleted)
+		if err != nil {
+			return err
+		}
+		noMetadata := len(metadatas) == 0
+		if invert == noMetadata {
+			newFile := strfmt.NewPathFromStr(c.AbsolutePath)
+			intDir := opx.Ternary(invert, ".extra", ".backup")
+			newFile.Parents = append(newFile.Parents, intDir)
+			if erase {
+				err = os.Remove(c.AbsolutePath)
+			} else {
+				err = filesystem.CreateDirectoryRecursive(newFile.ParentPath())
+				if err != nil {
+					return err
+				}
+				err = os.Rename(c.AbsolutePath, newFile.FullPath())
+			}
+			if err != nil {
+				return err
+			}
+			if erase {
+				m.logger.Info().
+					Str("path", c.RelativePath).
+					Msg("Deleted file.")
+			} else {
+				m.logger.Info().
+					Str("src", c.RelativePath).
+					Str("dest", newFile.FullPath()).
+					Msg("Moved file.")
+			}
+		}
+	}
+
+	return nil
 }
 
 // Scan and compute hashes using common algorithms (MD5, SHA-1, SHA-256, SHA-512) for inputs (files/folders)
@@ -219,6 +311,25 @@ func MetadataCmd() *cobra.Command {
 		Short: "File metadata management and mass file update using metadata.",
 	}
 
+	refineCmd := &cobra.Command{
+		Use:   "refine",
+		Short: "Refine file system contents by metadata.",
+		Run: func(cmd *cobra.Command, args []string) {
+			c := InitApp()
+			defer c.Close()
+			flags := ParseMetadataFlags(cmd)
+			m := NewMetadataModule(c, "scan")
+			m.logError(m.Refine(flags.WorkspaceDir, flags.Inputs, flags.Collections, flags.OnlyObsoleted, flags.Invert, flags.Erase))
+		},
+	}
+	refineCmd.Flags().StringSliceP("collections", "c", []string{}, "Names of collections of known files.")
+	refineCmd.Flags().Bool("erase", false, "Force delete matched files instead of moving.")
+	refineCmd.Flags().StringSliceP("inputs", "i", []string{}, "Files/Directories to refine.")
+	refineCmd.Flags().Bool("invert", false, "Take action on non-matched files instead of matched ones.")
+	refineCmd.Flags().BoolP("obsoleted", "o", false, "Only match obsoleted files.")
+	refineCmd.Flags().StringP("workspace", "w", "", "Directory contains Unifiler workspace.")
+	rootCmd.AddCommand(refineCmd)
+
 	scanCmd := &cobra.Command{
 		Use:   "scan",
 		Short: "Compute hashes for files using common algorithms (MD5, SHA-1, SHA-256, SHA-512) and persist them.",
@@ -239,25 +350,34 @@ func MetadataCmd() *cobra.Command {
 	return rootCmd
 }
 
-// Struct FileFlags contains all flags used by Metadata module.
+// Struct MetadataFlags contains all flags used by Metadata module.
 type MetadataFlags struct {
-	Collections  []string
-	Deleted      bool
-	Inputs       []string
-	WorkspaceDir string
+	Collections   []string
+	Deleted       bool
+	Erase         bool
+	Inputs        []string
+	Invert        bool
+	OnlyObsoleted bool
+	WorkspaceDir  string
 }
 
 // Extract all flags from a Cobra Command.
 func ParseMetadataFlags(cmd *cobra.Command) *MetadataFlags {
 	collections, _ := cmd.Flags().GetStringSlice("collections")
 	deleted, _ := cmd.Flags().GetBool("deleted")
+	erase, _ := cmd.Flags().GetBool("erase")
 	inputs, _ := cmd.Flags().GetStringSlice("inputs")
+	invert, _ := cmd.Flags().GetBool("invert")
+	obsoleted, _ := cmd.Flags().GetBool("obsoleted")
 	workspaceDir, _ := cmd.Flags().GetString("workspace")
 
 	return &MetadataFlags{
-		Collections:  collections,
-		Deleted:      deleted,
-		Inputs:       inputs,
-		WorkspaceDir: workspaceDir,
+		Collections:   collections,
+		Deleted:       deleted,
+		Erase:         erase,
+		Inputs:        inputs,
+		Invert:        invert,
+		OnlyObsoleted: obsoleted,
+		WorkspaceDir:  workspaceDir,
 	}
 }

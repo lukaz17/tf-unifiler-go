@@ -36,7 +36,7 @@ func NewSession(id uuid.UUID, time time.Time) *Session {
 	}
 }
 
-// SessionChangesCount count number of records in tracking tables.
+// SessionChangesCount counts number of records in tracking tables.
 type SessionChangesCount struct {
 	Hash    int64
 	Mapping int64
@@ -70,7 +70,7 @@ func (c *DbContext) CountSessionChanges(id uuid.UUID) (*SessionChangesCount, err
 	}, nil
 }
 
-// Get latest session ordered by time.
+// Get latest Session ordered by time.
 func (c *DbContext) GetLatestSession() (*Session, error) {
 	sessions, err := c.findSessions()
 	if err != nil {
@@ -82,7 +82,7 @@ func (c *DbContext) GetLatestSession() (*Session, error) {
 	return sessions[0], nil
 }
 
-// Persists Sessions.
+// Save Sessions to database.
 func (c *DbContext) SaveSessions(sessions []*Session) error {
 	ids := make([]uuid.UUID, len(sessions))
 	for i, session := range sessions {
@@ -116,7 +116,7 @@ func (c *DbContext) findSessions() ([]*Session, error) {
 	return docs, result.Error
 }
 
-// Return all Sessions having matched SessionIDs.
+// Return all Sessions that have specified SessionIDs.
 func (c *DbContext) findSessionsByIDs(ids uuid.UUIDs) ([]*Session, error) {
 	var docs []*Session
 	result := c.db.Model(&Session{}).

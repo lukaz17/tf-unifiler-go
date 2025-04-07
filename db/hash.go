@@ -21,6 +21,7 @@ import (
 	"github.com/tforceaio/tf-unifiler-go/core"
 )
 
+// Hash represents a set of hashes for a particular file along with basic metadata.
 type Hash struct {
 	ID     uuid.UUID `gorm:"column:id;primaryKey"`
 	Md5    string    `gorm:"column:md5"`
@@ -35,6 +36,7 @@ type Hash struct {
 	SessionID uuid.UUID `gorm:"session_id"`
 }
 
+// Return new hash.
 func NewHash(fileHashes *core.FileMultiHash, isIgnored bool) *Hash {
 	return &Hash{
 		Md5:         fileHashes.Md5.HexStr(),
@@ -47,24 +49,47 @@ func NewHash(fileHashes *core.FileMultiHash, isIgnored bool) *Hash {
 	}
 }
 
-func (ctx *DbContext) GetHash(id uuid.UUID) (*Hash, error) {
-	return ctx.findHash(id)
+// Get Hash by ID.
+func (c *DbContext) GetHash(id uuid.UUID) (*Hash, error) {
+	return c.findHash(id)
 }
 
-func (ctx *DbContext) GetHashBySha256(hash string) (*Hash, error) {
-	return ctx.findHashBySha256(hash)
+// Get Hash by its SHA-256.
+func (c *DbContext) GetHashBySha256(hash string) (*Hash, error) {
+	return c.findHashBySha256(hash)
 }
 
-func (ctx *DbContext) GetHashesBySetIDs(setIDs uuid.UUIDs) ([]*Hash, error) {
-	return ctx.findHashesBySetIDs(setIDs)
+// Get Hashes belong to Sets by SetIDs.
+func (c *DbContext) GetHashesBySetIDs(setIDs uuid.UUIDs) ([]*Hash, error) {
+	return c.findHashesBySetIDs(setIDs)
 }
 
-func (ctx *DbContext) GetHashesBySha256s(hashes []string) ([]*Hash, error) {
-	return ctx.findHashesBySha256s(hashes)
+// Get Hashes belong to Sets by Set Names and their SHA-256s.
+func (c *DbContext) GetHashesInSets(sets, sha256s []string, onlyIgnored bool) ([]*Hash, error) {
+	hashes, err := c.findHashesInSets(sets, sha256s)
+	if err != nil {
+		return nil, err
+	}
+	if onlyIgnored {
+		newHashes := []*Hash{}
+		for _, hash := range hashes {
+			if hash.IsIgnored {
+				newHashes = append(newHashes, hash)
+			}
+		}
+		return newHashes, nil
+	}
+	return hashes, nil
 }
 
-func (ctx *DbContext) SaveHash(hash *Hash) error {
-	changedHash, err := ctx.findHashBySha256(hash.Sha256)
+// Get Hashes by their SHA-256s.
+func (c *DbContext) GetHashesBySha256s(hashes []string) ([]*Hash, error) {
+	return c.findHashesBySha256s(hashes)
+}
+
+// Save Hash to database.
+func (c *DbContext) SaveHash(hash *Hash) error {
+	changedHash, err := c.findHashBySha256(hash.Sha256)
 	if err != nil {
 		return err
 	}
@@ -75,15 +100,16 @@ func (ctx *DbContext) SaveHash(hash *Hash) error {
 	} else {
 		changedHashes = append(changedHashes, hash)
 	}
-	return ctx.writeHashes(newHashes, changedHashes)
+	return c.writeHashes(newHashes, changedHashes)
 }
 
-func (ctx *DbContext) SaveHashes(hashes []*Hash) error {
+// Save Hashes to database.
+func (c *DbContext) SaveHashes(hashes []*Hash) error {
 	sha256s := make([]string, len(hashes))
 	for i, hash := range hashes {
 		sha256s[i] = hash.Sha256
 	}
-	changedHashes, err := ctx.findHashesBySha256s(sha256s)
+	changedHashes, err := c.findHashesBySha256s(sha256s)
 	if err != nil {
 		return err
 	}
@@ -99,49 +125,64 @@ func (ctx *DbContext) SaveHashes(hashes []*Hash) error {
 		newHashes = append(newHashes, hash)
 		changedHashesMap[hash.Sha256] = hash.ID
 	}
-	return ctx.writeHashes(newHashes, []*Hash{})
+	return c.writeHashes(newHashes, []*Hash{})
 }
 
-func (ctx *DbContext) findHash(id uuid.UUID) (*Hash, error) {
+// Return Hash that has specified id.
+func (c *DbContext) findHash(id uuid.UUID) (*Hash, error) {
 	var doc *Hash
-	result := ctx.db.Model(&Hash{}).
+	result := c.db.Model(&Hash{}).
 		Where("id = ?", id).
 		First(&doc)
-	if ctx.isEmptyResultError(result.Error) {
+	if c.isEmptyResultError(result.Error) {
 		return nil, nil
 	}
 	return doc, result.Error
 }
 
-func (ctx *DbContext) findHashBySha256(hash string) (*Hash, error) {
+// Return Hash that has specified SHA-256.
+func (c *DbContext) findHashBySha256(hash string) (*Hash, error) {
 	var doc *Hash
-	result := ctx.db.Model(&Hash{}).
+	result := c.db.Model(&Hash{}).
 		Where("sha256 = ?", hash).
 		First(&doc)
-	if ctx.isEmptyResultError(result.Error) {
+	if c.isEmptyResultError(result.Error) {
 		return nil, nil
 	}
 	return doc, result.Error
 }
 
-func (ctx *DbContext) findHashesBySetIDs(setIDs uuid.UUIDs) ([]*Hash, error) {
+// Return Hashes that belong to Sets that have specified setIDs.
+func (c *DbContext) findHashesBySetIDs(setIDs uuid.UUIDs) ([]*Hash, error) {
 	var docs []*Hash
-	result := ctx.db.Model(&Hash{}).
+	result := c.db.Model(&Hash{}).
 		InnerJoins("hashes ON hashes.id = set_hashes.hash_id AND set_hashes.set_id IN ?", setIDs).
 		Find(&docs)
 	return docs, result.Error
 }
 
-func (ctx *DbContext) findHashesBySha256s(hashes []string) ([]*Hash, error) {
+// Return Hashes that belong to Sets that have specified setNames and have specified SHA-256s.
+func (c *DbContext) findHashesInSets(setNames, sha256s []string) ([]*Hash, error) {
 	var docs []*Hash
-	result := ctx.db.Model(&Hash{}).
+	result := c.db.Model(&Hash{}).
+		InnerJoins("hashes ON hashes.id = set_hashes.hash_id AND sets ON set_hashes.set_id = sets.id").
+		Where("sets.name IN ? AND hashes.sha256 IN", setNames, sha256s).
+		Find(&docs)
+	return docs, result.Error
+}
+
+// Return Hashes that have specified SHA-256s.
+func (c *DbContext) findHashesBySha256s(hashes []string) ([]*Hash, error) {
+	var docs []*Hash
+	result := c.db.Model(&Hash{}).
 		Where("sha256 IN ?", hashes).
 		Find(&docs)
 	return docs, result.Error
 }
 
-func (ctx *DbContext) writeHashes(newHashes []*Hash, changedHashes []*Hash) error {
-	tx := ctx.db.Begin()
+// Insert new Hashes and update old Hashes in one transaction.
+func (c *DbContext) writeHashes(newHashes []*Hash, changedHashes []*Hash) error {
+	tx := c.db.Begin()
 	for _, hash := range newHashes {
 		if hash.ID == uuid.Nil {
 			var err error
@@ -178,8 +219,11 @@ func (ctx *DbContext) writeHashes(newHashes []*Hash, changedHashes []*Hash) erro
 	return nil
 }
 
-func (ctx *DbContext) setIgnoredBySha256s(hashesToIgnore, hashesToApprove []string) error {
-	tx := ctx.db.Begin()
+// Update is_ignored flag of Hashes identified by their SHA-256s.
+// hashesToIgnore will have is_ignored set to true.
+// hashesToApprove will have is_ignored set to false.
+func (c *DbContext) setIgnoredBySha256s(hashesToIgnore, hashesToApprove []string) error {
+	tx := c.db.Begin()
 	if len(hashesToIgnore) > 0 {
 		result := tx.Model(&Hash{}).
 			Where("sha256 IN ?", hashesToIgnore).
