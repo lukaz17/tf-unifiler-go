@@ -79,7 +79,8 @@ func (ctx *DbContext) findSetByName(name string) (*Set, error) {
 func (ctx *DbContext) findSetsByNames(names []string) ([]*Set, error) {
 	var docs []*Set
 	result := ctx.db.Model(&Set{}).
-		Where("name IN ?", names).
+		Where("0 = ? OR name IN ?", len(names), names).
+		Order("name ASC").
 		Find(&docs)
 	return docs, result.Error
 }

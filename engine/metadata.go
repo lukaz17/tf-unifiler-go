@@ -267,6 +267,10 @@ func (m *MetadataModule) QuerySession(workspaceDir string, sessionID string) err
 	if err != nil {
 		return err
 	}
+	if session == nil {
+		fmt.Println("Session not found.")
+		return nil
+	}
 	sessionChanges, err := ctx.CountSessionChanges(sid)
 	if err != nil {
 		return err
@@ -274,13 +278,62 @@ func (m *MetadataModule) QuerySession(workspaceDir string, sessionID string) err
 
 	fmt.Println("DETAILS")
 	fmt.Println("Time: ", session.Time)
-	fmt.Println("")
 	fmt.Println("-----------------")
 	fmt.Println("CHANGES")
 	fmt.Println("Hash:    ", sessionChanges.Hash)
 	fmt.Println("Mapping: ", sessionChanges.Mapping)
 	fmt.Println("Set:     ", sessionChanges.Set)
 	fmt.Println("SetHash: ", sessionChanges.SetHash)
+
+	return nil
+}
+
+// Query Set data.
+func (m *MetadataModule) QuerySet(workspaceDir, setName string) error {
+	if workspaceDir == "" {
+		return errors.New("workspace is not set")
+	} else if !filesystem.IsDirectoryExist(workspaceDir) {
+		return errors.New("workspace is not found")
+	}
+
+	dbFile := MetadataWorkspaceDatabase(workspaceDir)
+	ctx, err := db.Connect(dbFile)
+	if err != nil {
+		return err
+	}
+
+	if setName == "" {
+		sets, err := ctx.GetSetsByNames([]string{})
+		if err != nil {
+			return err
+		}
+		fmt.Println("ALL SETS: ")
+		for _, s := range sets {
+			fmt.Printf("%s %v\n", s.ID, s.Name)
+		}
+		return nil
+	}
+
+	sets, err := ctx.GetSetsByNames([]string{setName})
+	if err != nil {
+		return err
+	}
+	if len(sets) == 0 {
+		fmt.Println("Set not found.")
+		return nil
+	}
+	hashes, err := ctx.GetHashesInSets([]string{setName}, []string{}, false)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("DETAILS")
+	fmt.Println("ID: ", sets[0].ID)
+	fmt.Println("-----------------")
+	fmt.Println("RESULTS")
+	for i, h := range hashes {
+		fmt.Println(i+1, h.Sha256, "/", h.Md5, "/", h.Sha1, "/", h.Description)
+	}
 
 	return nil
 }
@@ -470,6 +523,21 @@ func metadataQueryCmd() *cobra.Command {
 	sessionCmd.Flags().StringP("workspace", "w", "", "Directory contains Unifiler workspace.")
 	queryCmd.AddCommand(sessionCmd)
 
+	setCmd := &cobra.Command{
+		Use:   "set",
+		Short: "Query collection information.",
+		Run: func(cmd *cobra.Command, args []string) {
+			c := InitApp()
+			defer c.Close()
+			flags := ParseMetadataFlags(cmd)
+			m := NewMetadataModule(c, "query_set")
+			m.logError(m.QuerySet(flags.WorkspaceDir, flags.Name))
+		},
+	}
+	setCmd.Flags().StringP("name", "n", "", "Collection name.")
+	setCmd.Flags().StringP("workspace", "w", "", "Directory contains Unifiler workspace.")
+	queryCmd.AddCommand(setCmd)
+
 	return queryCmd
 }
 
@@ -482,6 +550,7 @@ type MetadataFlags struct {
 	ID            string
 	Inputs        []string
 	Invert        bool
+	Name          string
 	OnlyObsoleted bool
 	WorkspaceDir  string
 }
@@ -495,6 +564,7 @@ func ParseMetadataFlags(cmd *cobra.Command) *MetadataFlags {
 	id, _ := cmd.Flags().GetString("id")
 	inputs, _ := cmd.Flags().GetStringSlice("inputs")
 	invert, _ := cmd.Flags().GetBool("invert")
+	name, _ := cmd.Flags().GetString("name")
 	obsoleted, _ := cmd.Flags().GetBool("obsoleted")
 	workspaceDir, _ := cmd.Flags().GetString("workspace")
 
@@ -506,6 +576,7 @@ func ParseMetadataFlags(cmd *cobra.Command) *MetadataFlags {
 		ID:            id,
 		Inputs:        inputs,
 		Invert:        invert,
+		Name:          name,
 		OnlyObsoleted: obsoleted,
 		WorkspaceDir:  workspaceDir,
 	}
