@@ -17,6 +17,9 @@
 package db
 
 import (
+	"path/filepath"
+
+	"github.com/tforceaio/tf-unifiler-go/filesystem"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -32,6 +35,13 @@ type DbContext struct {
 // Return new DbContext if the connection is successful.
 // Target database will be migrated to match database models.
 func Connect(uri string) (*DbContext, error) {
+	parentDir := filepath.Dir(uri)
+	if !filesystem.IsDirectoryExist(parentDir) {
+		err := filesystem.CreateDirectoryRecursive(parentDir)
+		if err != nil {
+			return nil, err
+		}
+	}
 	db, err := gorm.Open(sqlite.Open(uri), &gorm.Config{})
 	if err != nil {
 		return nil, err

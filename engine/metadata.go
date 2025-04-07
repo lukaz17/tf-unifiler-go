@@ -19,6 +19,7 @@ package engine
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"time"
@@ -205,6 +206,58 @@ func (m *MetadataModule) Scan(workspaceDir string, inputs, collections []string,
 	return nil
 }
 
+// Query Session data.
+func (m *MetadataModule) QuerySession(workspaceDir string, sessionID string) error {
+	if workspaceDir == "" {
+		return errors.New("workspace is not set")
+	} else if !filesystem.IsDirectoryExist(workspaceDir) {
+		return errors.New("workspace is not found")
+	}
+
+	dbFile := MetadataWorkspaceDatabase(workspaceDir)
+	ctx, err := db.Connect(dbFile)
+	if err != nil {
+		return err
+	}
+
+	if sessionID == "" {
+		sessions, err := ctx.GetSessions()
+		if err != nil {
+			return err
+		}
+		fmt.Println("Latest sessions: ")
+		for _, s := range sessions {
+			fmt.Printf("%s %v\n", s.ID, s.Time)
+		}
+		return nil
+	}
+
+	sid, err := uuid.Parse(sessionID)
+	if err != nil {
+		return err
+	}
+	session, err := ctx.GetSession(sid)
+	if err != nil {
+		return err
+	}
+	sessionChanges, err := ctx.CountSessionChanges(sid)
+	if err != nil {
+		return err
+	}
+
+	fmt.Println("DETAILS")
+	fmt.Println("Time: ", session.Time)
+	fmt.Println("")
+	fmt.Println("-----------------")
+	fmt.Println("CHANGES")
+	fmt.Println("Hash:    ", sessionChanges.Hash)
+	fmt.Println("Mapping: ", sessionChanges.Mapping)
+	fmt.Println("Set:     ", sessionChanges.Set)
+	fmt.Println("SetHash: ", sessionChanges.SetHash)
+
+	return nil
+}
+
 // Decorator to log error occurred when calling handlers.
 func (m *MetadataModule) logError(err error) {
 	if err != nil {
@@ -347,7 +400,33 @@ func MetadataCmd() *cobra.Command {
 	scanCmd.Flags().StringP("workspace", "w", "", "Directory contains Unifiler workspace.")
 	rootCmd.AddCommand(scanCmd)
 
+	rootCmd.AddCommand(metadataQueryCmd())
+
 	return rootCmd
+}
+
+func metadataQueryCmd() *cobra.Command {
+	queryCmd := &cobra.Command{
+		Use:   "query",
+		Short: "Query metadata database.",
+	}
+
+	sessionCmd := &cobra.Command{
+		Use:   "session",
+		Short: "Query session information.",
+		Run: func(cmd *cobra.Command, args []string) {
+			c := InitApp()
+			defer c.Close()
+			flags := ParseMetadataFlags(cmd)
+			m := NewMetadataModule(c, "query_session")
+			m.logError(m.QuerySession(flags.WorkspaceDir, flags.ID))
+		},
+	}
+	sessionCmd.Flags().StringP("id", "i", "", "Session ID.")
+	sessionCmd.Flags().StringP("workspace", "w", "", "Directory contains Unifiler workspace.")
+	queryCmd.AddCommand(sessionCmd)
+
+	return queryCmd
 }
 
 // Struct MetadataFlags contains all flags used by Metadata module.
@@ -355,6 +434,7 @@ type MetadataFlags struct {
 	Collections   []string
 	Deleted       bool
 	Erase         bool
+	ID            string
 	Inputs        []string
 	Invert        bool
 	OnlyObsoleted bool
@@ -366,6 +446,7 @@ func ParseMetadataFlags(cmd *cobra.Command) *MetadataFlags {
 	collections, _ := cmd.Flags().GetStringSlice("collections")
 	deleted, _ := cmd.Flags().GetBool("deleted")
 	erase, _ := cmd.Flags().GetBool("erase")
+	id, _ := cmd.Flags().GetString("id")
 	inputs, _ := cmd.Flags().GetStringSlice("inputs")
 	invert, _ := cmd.Flags().GetBool("invert")
 	obsoleted, _ := cmd.Flags().GetBool("obsoleted")
@@ -375,6 +456,7 @@ func ParseMetadataFlags(cmd *cobra.Command) *MetadataFlags {
 		Collections:   collections,
 		Deleted:       deleted,
 		Erase:         erase,
+		ID:            id,
 		Inputs:        inputs,
 		Invert:        invert,
 		OnlyObsoleted: obsoleted,

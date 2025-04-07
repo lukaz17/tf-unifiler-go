@@ -70,6 +70,16 @@ func (c *DbContext) CountSessionChanges(id uuid.UUID) (*SessionChangesCount, err
 	}, nil
 }
 
+// Get Session by ID.
+func (c *DbContext) GetSession(id uuid.UUID) (*Session, error) {
+	return c.findSession(id)
+}
+
+// Get all Sessions ordered by time.
+func (c *DbContext) GetSessions() ([]*Session, error) {
+	return c.findSessions()
+}
+
 // Get latest Session ordered by time.
 func (c *DbContext) GetLatestSession() (*Session, error) {
 	sessions, err := c.findSessions()
@@ -105,6 +115,18 @@ func (c *DbContext) SaveSessions(sessions []*Session) error {
 		changedSessionsMap[session.ID] = session.ID
 	}
 	return c.writeSessions(newSessions, []*Session{})
+}
+
+// Return Session that has specified ID.
+func (c *DbContext) findSession(id uuid.UUID) (*Session, error) {
+	var doc *Session
+	result := c.db.Model(&Session{}).
+		Where("id = ?", id).
+		First(&doc)
+	if c.isEmptyResultError(result.Error) {
+		return nil, nil
+	}
+	return doc, result.Error
 }
 
 // Return all Sessions ordered by time descending.
