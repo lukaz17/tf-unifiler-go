@@ -445,38 +445,38 @@ func MetadataCmd() *cobra.Command {
 	}
 
 	refineCmd := &cobra.Command{
-		Use:   "refine",
+		Use:   "refine <input>...",
 		Short: "Refine file system contents by metadata.",
 		Run: func(cmd *cobra.Command, args []string) {
 			c := InitApp()
 			defer c.Close()
-			flags := ParseMetadataFlags(cmd)
+			flags := ParseMetadataFlags(cmd, args)
 			m := NewMetadataModule(c, "scan")
 			m.logError(m.Refine(flags.WorkspaceDir, flags.Inputs, flags.Collections, flags.OnlyObsoleted, flags.Invert, flags.Erase))
 		},
 	}
-	refineCmd.Flags().StringSliceP("collections", "c", []string{}, "Names of collections of known files.")
+	refineCmd.Flags().StringSliceP("collections", "c", []string{}, "Names of collections of known files, comma-separated list supported.")
 	refineCmd.Flags().Bool("erase", false, "Force delete matched files instead of moving.")
-	refineCmd.Flags().StringSliceP("inputs", "i", []string{}, "Files/Directories to refine.")
+	refineCmd.Flags().StringArrayP("inputs", "i", []string{}, "Files/Directories to refine.")
 	refineCmd.Flags().Bool("invert", false, "Take action on non-matched files instead of matched ones.")
 	refineCmd.Flags().BoolP("obsoleted", "o", false, "Only match obsoleted files.")
 	refineCmd.Flags().StringP("workspace", "w", "", "Directory contains Unifiler workspace.")
 	rootCmd.AddCommand(refineCmd)
 
 	scanCmd := &cobra.Command{
-		Use:   "scan",
+		Use:   "scan <input>...",
 		Short: "Compute hashes for files using common algorithms (MD5, SHA-1, SHA-256, SHA-512) and persist them.",
 		Run: func(cmd *cobra.Command, args []string) {
 			c := InitApp()
 			defer c.Close()
-			flags := ParseMetadataFlags(cmd)
+			flags := ParseMetadataFlags(cmd, args)
 			m := NewMetadataModule(c, "scan")
 			m.logError(m.Scan(flags.WorkspaceDir, flags.Inputs, flags.Collections, flags.Deleted))
 		},
 	}
-	scanCmd.Flags().StringSliceP("collections", "c", []string{}, "Names of collections of known files. If a collection existed, files will be appended to that collection.")
+	scanCmd.Flags().StringSliceP("collections", "c", []string{}, "Names of collections of known files, comma-separated list supported. If a collection existed, files will be appended to that collection.")
 	scanCmd.Flags().Bool("delete", false, "Mark the inputs as obsoleted.")
-	scanCmd.Flags().StringSliceP("inputs", "i", []string{}, "Files/Directories to hash.")
+	scanCmd.Flags().StringArrayP("inputs", "i", []string{}, "Files/Directories to hash.")
 	scanCmd.Flags().StringP("workspace", "w", "", "Directory contains Unifiler workspace.")
 	rootCmd.AddCommand(scanCmd)
 
@@ -497,13 +497,13 @@ func metadataQueryCmd() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			c := InitApp()
 			defer c.Close()
-			flags := ParseMetadataFlags(cmd)
+			flags := ParseMetadataFlags(cmd, nil)
 			m := NewMetadataModule(c, "query_hash")
 			m.logError(m.QueryHash(flags.WorkspaceDir, flags.Collections, flags.Hashes, flags.OnlyObsoleted))
 		},
 	}
-	hashCmd.Flags().StringSliceP("collections", "c", []string{}, "Names of collections of known files.")
-	hashCmd.Flags().StringSliceP("hashes", "v", []string{}, "SHA-256s of known files.")
+	hashCmd.Flags().StringSliceP("collections", "c", []string{}, "Names of collections of known files, comma-separated list supported.")
+	hashCmd.Flags().StringSliceP("hashes", "v", []string{}, "SHA-256s of known files, comma-separated list supported.")
 	hashCmd.Flags().BoolP("obsoleted", "o", false, "Only match obsoleted files.")
 	hashCmd.Flags().StringP("workspace", "w", "", "Directory contains Unifiler workspace.")
 	queryCmd.AddCommand(hashCmd)
@@ -514,7 +514,7 @@ func metadataQueryCmd() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			c := InitApp()
 			defer c.Close()
-			flags := ParseMetadataFlags(cmd)
+			flags := ParseMetadataFlags(cmd, nil)
 			m := NewMetadataModule(c, "query_session")
 			m.logError(m.QuerySession(flags.WorkspaceDir, flags.ID))
 		},
@@ -529,7 +529,7 @@ func metadataQueryCmd() *cobra.Command {
 		Run: func(cmd *cobra.Command, args []string) {
 			c := InitApp()
 			defer c.Close()
-			flags := ParseMetadataFlags(cmd)
+			flags := ParseMetadataFlags(cmd, nil)
 			m := NewMetadataModule(c, "query_set")
 			m.logError(m.QuerySet(flags.WorkspaceDir, flags.Name))
 		},
@@ -556,17 +556,18 @@ type MetadataFlags struct {
 }
 
 // Extract all flags from a Cobra Command.
-func ParseMetadataFlags(cmd *cobra.Command) *MetadataFlags {
+func ParseMetadataFlags(cmd *cobra.Command, args []string) *MetadataFlags {
 	collections, _ := cmd.Flags().GetStringSlice("collections")
 	deleted, _ := cmd.Flags().GetBool("deleted")
 	erase, _ := cmd.Flags().GetBool("erase")
 	hashes, _ := cmd.Flags().GetStringSlice("hashes")
 	id, _ := cmd.Flags().GetString("id")
-	inputs, _ := cmd.Flags().GetStringSlice("inputs")
+	inputs, _ := cmd.Flags().GetStringArray("inputs")
 	invert, _ := cmd.Flags().GetBool("invert")
 	name, _ := cmd.Flags().GetString("name")
 	obsoleted, _ := cmd.Flags().GetBool("obsoleted")
 	workspaceDir, _ := cmd.Flags().GetString("workspace")
+	inputs = append(args, inputs...)
 
 	return &MetadataFlags{
 		Collections:   collections,

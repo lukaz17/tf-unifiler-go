@@ -234,31 +234,31 @@ func FileCmd() *cobra.Command {
 	}
 
 	hashCmd := &cobra.Command{
-		Use:   "hash",
+		Use:   "hash <input>...",
 		Short: "Compute hashes for files using common algorithms (MD5, SHA-1, SHA-256, SHA-512).",
 		Run: func(cmd *cobra.Command, args []string) {
 			c := InitApp()
 			defer c.Close()
-			flags := ParseFileFlags(cmd)
+			flags := ParseFileFlags(cmd, args)
 			m := NewFileModule(c, "hash")
 			m.logError(m.Hash(flags.Inputs))
 		},
 	}
-	hashCmd.Flags().StringSliceP("inputs", "i", []string{}, "Files/Directories to hash.")
+	hashCmd.Flags().StringArrayP("inputs", "i", []string{}, "Files/Directories to hash.")
 	rootCmd.AddCommand(hashCmd)
 
 	renameCmd := &cobra.Command{
-		Use:   "rename",
+		Use:   "rename <input>...",
 		Short: "Rename multiples file using pre-defined settings.",
 		Run: func(cmd *cobra.Command, args []string) {
 			c := InitApp()
 			defer c.Close()
-			flags := ParseFileFlags(cmd)
+			flags := ParseFileFlags(cmd, args)
 			m := NewFileModule(c, "rename")
 			m.logError(m.Rename(flags.Inputs, flags.Preset))
 		},
 	}
-	renameCmd.Flags().StringSliceP("inputs", "i", []string{}, "Files to rename. Directories will be ignored.")
+	renameCmd.Flags().StringArrayP("inputs", "i", []string{}, "Files to rename. Directories will be ignored.")
 	renameCmd.Flags().StringP("preset", "p", "", "Name of pre-defined settings for renaming.")
 	rootCmd.AddCommand(renameCmd)
 
@@ -272,9 +272,10 @@ type FileFlags struct {
 }
 
 // Extract all flags from a Cobra Command.
-func ParseFileFlags(cmd *cobra.Command) *FileFlags {
-	inputs, _ := cmd.Flags().GetStringSlice("inputs")
+func ParseFileFlags(cmd *cobra.Command, args []string) *FileFlags {
+	inputs, _ := cmd.Flags().GetStringArray("inputs")
 	preset, _ := cmd.Flags().GetString("preset")
+	inputs = append(args, inputs...)
 
 	return &FileFlags{
 		Inputs: inputs,

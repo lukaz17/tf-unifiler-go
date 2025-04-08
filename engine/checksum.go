@@ -115,20 +115,20 @@ func ChecksumCmd() *cobra.Command {
 	}
 
 	createCmd := &cobra.Command{
-		Use:   "create",
+		Use:   "create <input>...",
 		Short: "Create checksum file(s) using 1 or many hash algorithms.",
 		Run: func(cmd *cobra.Command, args []string) {
 			c := InitApp()
 			defer c.Close()
-			flags := ParseChecksumFlags(cmd)
+			flags := ParseChecksumFlags(cmd, args)
 			m := NewChecksumModule(c, "create")
 			m.logError(m.Create(flags.Inputs, flags.Output, flags.Algorithms))
 		},
 	}
-	createCmd.Flags().StringSliceP("algo", "a", []string{"sha1"}, "Hash algorithms to use, multiple supported. Supported algorithms: md4, md5, ripemd160, sha1, sha224, sha256, sha384, sha512.")
-	createCmd.Flags().StringSliceP("inputs", "i", []string{}, "Files/Directories to create checksum.")
+	createCmd.Flags().StringSliceP("algo", "a", []string{"sha1"}, "Hash algorithms to use, comma-separated list supported. Supported algorithms: md4, md5, ripemd160, sha1, sha224, sha256, sha384, sha512.")
+	createCmd.Flags().StringArrayP("inputs", "i", []string{}, "Files/Directories to create checksum.")
 	createCmd.Flags().StringP("output", "o", "", "Directory to store the calculated checksum file(s).")
-	createCmd.Flags().StringSliceP("title", "t", []string{}, "Output file name. This will override program smart naming scheme.")
+	createCmd.Flags().StringP("title", "t", "", "Output file name. This will override program smart naming scheme.")
 	rootCmd.AddCommand(createCmd)
 
 	return rootCmd
@@ -143,11 +143,12 @@ type ChecksumFlags struct {
 }
 
 // Extract all flags from a Cobra Command.
-func ParseChecksumFlags(cmd *cobra.Command) *ChecksumFlags {
+func ParseChecksumFlags(cmd *cobra.Command, args []string) *ChecksumFlags {
 	algorithms, _ := cmd.Flags().GetStringSlice("algo")
-	inputs, _ := cmd.Flags().GetStringSlice("inputs")
+	inputs, _ := cmd.Flags().GetStringArray("inputs")
 	output, _ := cmd.Flags().GetString("output")
 	outputName, _ := cmd.Flags().GetString("title")
+	inputs = append(args, inputs...)
 
 	return &ChecksumFlags{
 		Algorithms: algorithms,
