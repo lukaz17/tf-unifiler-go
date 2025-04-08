@@ -23,6 +23,8 @@ import (
 type Set struct {
 	ID   uuid.UUID `gorm:"column:id;primaryKey"`
 	Name string    `gorm:"column:name;uniqueIndex"`
+
+	SessionID uuid.UUID `gorm:"session_id"`
 }
 
 func NewSet(name string) *Set {
@@ -77,7 +79,8 @@ func (ctx *DbContext) findSetByName(name string) (*Set, error) {
 func (ctx *DbContext) findSetsByNames(names []string) ([]*Set, error) {
 	var docs []*Set
 	result := ctx.db.Model(&Set{}).
-		Where("name IN ?", names).
+		Where("0 = ? OR name IN ?", len(names), names).
+		Order("name ASC").
 		Find(&docs)
 	return docs, result.Error
 }
@@ -87,7 +90,7 @@ func (ctx *DbContext) writeSets(newSets []*Set, _ []*Set) error {
 	for _, set := range newSets {
 		if set.ID == uuid.Nil {
 			var err error
-			set.ID, err = uuid.NewV7()
+			set.ID, err = uuid.NewRandom()
 			if err != nil {
 				return err
 			}

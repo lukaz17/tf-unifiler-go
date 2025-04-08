@@ -26,6 +26,8 @@ type Mapping struct {
 	HashID    uuid.UUID `gorm:"column:hash_id"`
 	Name      string    `gorm:"column:name"`
 	Extension string    `gorm:"column:extension"`
+
+	SessionID uuid.UUID `gorm:"session_id"`
 }
 
 func (e *Mapping) FullName() string {
@@ -93,7 +95,7 @@ func (ctx *DbContext) writeMappings(newMappings []*Mapping, changedMappings []*M
 	for _, mapping := range newMappings {
 		if mapping.ID == uuid.Nil {
 			var err error
-			mapping.ID, err = uuid.NewV7()
+			mapping.ID, err = uuid.NewRandom()
 			if err != nil {
 				return err
 			}
@@ -108,9 +110,10 @@ func (ctx *DbContext) writeMappings(newMappings []*Mapping, changedMappings []*M
 		result := tx.Model(&Mapping{}).
 			Where("id = ?", mapping.ID).
 			Updates(map[string]interface{}{
-				"hash_id":   mapping.HashID,
-				"name":      mapping.Name,
-				"extension": mapping.Extension,
+				"hash_id":    mapping.HashID,
+				"name":       mapping.Name,
+				"extension":  mapping.Extension,
+				"session_id": mapping.SessionID,
 			})
 		if result.Error != nil {
 			tx.Rollback()

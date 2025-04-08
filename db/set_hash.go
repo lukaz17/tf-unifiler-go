@@ -24,6 +24,8 @@ import (
 type SetHash struct {
 	SetID  uuid.UUID `gorm:"column:set_id;primaryKey"`
 	HashID uuid.UUID `gorm:"column:hash_id;primaryKey"`
+
+	SessionID uuid.UUID `gorm:"session_id"`
 }
 
 func NewSetHash(setID, hashID uuid.UUID) *SetHash {
