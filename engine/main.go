@@ -29,7 +29,7 @@ import (
 )
 
 var majorVersion = 0
-var minorVersion = 4
+var minorVersion = 5
 var patchVersion = 0
 var gitCommit, gitDate, gitBranch string
 
