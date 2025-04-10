@@ -116,10 +116,11 @@ func buildFlags(env Environment, staticLinking bool, buildTags []string) (flags 
 	// cgo-linker further down.
 	ld = append(ld, "--buildid=none")
 
+	mainPackage := "github.com/tforceaio/tf-unifiler-go/engine"
 	if env.Commit != "" {
-		ld = append(ld, "-X", "main.gitCommit="+fmt.Sprintf("%.8s", env.Commit))
-		ld = append(ld, "-X", "main.gitDate="+env.Date)
-		ld = append(ld, "-X", "main.gitBranch="+env.Branch)
+		ld = append(ld, "-X", mainPackage+".gitCommit="+fmt.Sprintf("%.8s", env.Commit))
+		ld = append(ld, "-X", mainPackage+".gitDate="+env.Date)
+		ld = append(ld, "-X", mainPackage+".gitBranch="+env.Branch)
 	}
 	// Omit debug information to reduce file size
 	// See https://go.dev/doc/gdb#Introduction
