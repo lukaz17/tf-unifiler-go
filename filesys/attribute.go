@@ -1,0 +1,40 @@
+// Copyright (C) 2025 T-Force I/O
+// This file is part of TFunifiler
+//
+// TFunifiler is free software: you can redistribute it and/or modify
+// it under the terms of the GNU General Public License as published by
+// the Free Software Foundation, either version 3 of the License, or
+// (at your option) any later version.
+//
+// TFunifiler is distributed in the hope that it will be useful,
+// but WITHOUT ANY WARRANTY; without even the implied warranty of
+// MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
+// GNU General Public License for more details.
+//
+// You should have received a copy of the GNU General Public License
+// along with TFunifiler. If not, see <https://www.gnu.org/licenses/>.
+
+package filesys
+
+import (
+	"os"
+	"time"
+)
+
+// Set Access time of a file or directory.
+func SetAccessTime(path string, atime time.Time) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	return os.Chtimes(path, atime, info.ModTime())
+}
+
+// Set Modified time of a file or directory.
+func SetModifiedTime(path string, mtime time.Time) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	return os.Chtimes(path, info.ModTime(), mtime)
+}
