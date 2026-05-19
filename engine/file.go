@@ -1,4 +1,4 @@
-// Copyright (C) 2024 T-Force I/O
+// Copyright (C) 2025 T-Force I/O
 // This file is part of TFunifiler
 //
 // TFunifiler is free software: you can redistribute it and/or modify
@@ -25,8 +25,11 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
 	"github.com/tforce-io/tf-golib/opx"
+	"github.com/tforceaio/tf-unifiler/config"
+	"github.com/tforceaio/tf-unifiler/core/compression"
 	"github.com/tforceaio/tf-unifiler/diag"
 	"github.com/tforceaio/tf-unifiler/filesys"
+	"github.com/tforceaio/tf-unifiler/internal/nullable"
 )
 
 // Struct FileRenameMapping stores old and new filename after renaming for rollback.
@@ -37,6 +40,7 @@ type FileRenameMapping struct {
 
 // FileModule handles user requests related to batch processing files.
 type FileModule struct {
+	cfg      *config.RootConfig
 	notifier diag.Notifier
 	logger   zerolog.Logger
 }
@@ -44,6 +48,7 @@ type FileModule struct {
 // Return new FileModule.
 func NewFileModule(c *Controller, cmdName string) *FileModule {
 	return &FileModule{
+		cfg:      c.Root,
 		notifier: c.Notifier,
 		logger:   c.CommandLogger("file", cmdName),
 	}
@@ -75,6 +80,56 @@ func (m *FileModule) Hash(inputs []string) error {
 			Str("sha512", hex.EncodeToString(r.Hashes[4].Hash)).
 			Int("size", r.Hashes[0].Size).
 			Msg("Hashed file.")
+	}
+
+	return nil
+}
+
+// Multi-pack inputs (files/folders) into an archives.
+func (m *FileModule) Pack(inputs []string, output string, format string, level string, solid bool, dictSize int, password string, threads int, move bool, separate bool) error {
+	if err := validateInputs(inputs); err != nil {
+		return err
+	}
+	if output == "" {
+		return errors.New("output path is required")
+	}
+	if err := validateArchiveFormat(format); err != nil {
+		return err
+	}
+	compressLevel, err := compression.ParseLevel(level)
+	if err != nil {
+		return err
+	}
+
+	m.logger.Info().
+		Strs("inputs", filesys.NormalizePaths(inputs, true)).
+		Str("output", filesys.NormalizePath(output, true)).
+		Str("compress", level).
+		Str("format", format).
+		Bool("move", move).
+		Bool("separateInputs", separate).
+		Bool("solid", solid).
+		Int("dictSize", dictSize).
+		Int("threads", threads).
+		Msg("Start packing files.")
+
+	var solidMode nullable.Bool
+	if solid {
+		solidMode = nullable.FromBool(solid)
+	}
+	var threadNum nullable.Int
+	if threads > 0 {
+		threadNum = nullable.FromInt(threads)
+	}
+	packResults, err := packFiles(inputs, output, format, compressLevel, solidMode, dictSize, password, threadNum, move, separate, m.cfg.Path, m.notifier, false)
+	if err != nil {
+		return err
+	}
+
+	for _, path := range packResults {
+		m.logger.Info().
+			Str("archive", path).
+			Msg("Packed files.")
 	}
 
 	return nil
@@ -210,6 +265,28 @@ func FileCmd() *cobra.Command {
 	}
 	rootCmd.AddCommand(hashCmd)
 
+	packCmd := &cobra.Command{
+		Use:   "pack <input>...",
+		Short: "Pack files into an archive.",
+		Run: func(cmd *cobra.Command, args []string) {
+			c := InitApp()
+			defer c.Close()
+			flags := ParseFileFlags(cmd, args)
+			m := NewFileModule(c, "pack")
+			m.logError(m.Pack(flags.Inputs, flags.Output, flags.Format, flags.Level, flags.Solid, flags.DictSize, flags.Password, flags.Threads, flags.Move, flags.Separate))
+		},
+	}
+	packCmd.Flags().IntP("dict", "d", 0, "Dictionary size in MB for compression (0 = use default).")
+	packCmd.Flags().StringP("format", "f", "", "Archive format: rar or 7z.")
+	packCmd.Flags().StringP("level", "l", "normal", "Compression level: none (0), fast (1), normal (2), high (3)")
+	packCmd.Flags().BoolP("move", "m", false, "Move files into archive after compression.")
+	packCmd.Flags().StringP("output", "o", "", "Output archive file path.")
+	packCmd.Flags().StringP("password", "p", "", "Password to protect the archive.")
+	packCmd.Flags().BoolP("separate", "e", false, "Compress each input into a separate archive.")
+	packCmd.Flags().BoolP("solid", "s", false, "Enable solid mode for better compression ratio.")
+	packCmd.Flags().IntP("threads", "t", 0, "Number of threads to use for compression.")
+	rootCmd.AddCommand(packCmd)
+
 	renameCmd := &cobra.Command{
 		Use:   "rename <input>...",
 		Short: "Multi-rename files and directories.",
@@ -229,18 +306,45 @@ func FileCmd() *cobra.Command {
 
 // Struct FileFlags contains all flags used by File module.
 type FileFlags struct {
-	Inputs []string
-	Preset string
+	DictSize int
+	Format   string
+	Inputs   []string
+	Level    string
+	Move     bool
+	Output   string
+	Password string
+	Preset   string
+	Separate bool
+	Solid    bool
+	Threads  int
 }
 
 // Extract all flags from a Cobra Command.
 func ParseFileFlags(cmd *cobra.Command, args []string) *FileFlags {
+	dictSize, _ := cmd.Flags().GetInt("dict")
+	format, _ := cmd.Flags().GetString("format")
 	inputs, _ := cmd.Flags().GetStringArray("inputs")
+	level, _ := cmd.Flags().GetString("level")
+	move, _ := cmd.Flags().GetBool("move")
+	output, _ := cmd.Flags().GetString("output")
+	password, _ := cmd.Flags().GetString("password")
 	preset, _ := cmd.Flags().GetString("preset")
+	separate, _ := cmd.Flags().GetBool("separate")
+	solid, _ := cmd.Flags().GetBool("solid")
+	threads, _ := cmd.Flags().GetInt("threads")
 	inputs = append(args, inputs...)
 
 	return &FileFlags{
-		Inputs: inputs,
-		Preset: preset,
+		DictSize: dictSize,
+		Format:   format,
+		Inputs:   inputs,
+		Level:    level,
+		Move:     move,
+		Output:   output,
+		Password: password,
+		Preset:   preset,
+		Separate: separate,
+		Solid:    solid,
+		Threads:  threads,
 	}
 }

@@ -19,9 +19,22 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/tforceaio/tf-unifiler/filesys"
 )
+
+// Check for valid archive format.
+func validateArchiveFormat(format string) error {
+	if format == "" {
+		return errors.New("format is required")
+	}
+	formats := []string{"7z", "rar"}
+	if slices.Contains(formats, format) {
+		return nil
+	}
+	return fmt.Errorf("unknown format: %s", format)
+}
 
 // Check for non empty input and its existence on disk.
 func validateInput(input, label string) error {

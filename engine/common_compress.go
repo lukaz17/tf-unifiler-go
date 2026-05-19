@@ -17,8 +17,130 @@
 package engine
 
 import (
+	"errors"
+	"os"
+	"path/filepath"
+	"strconv"
+	"strings"
+
+	"github.com/tforce-io/tf-golib/opx"
+	"github.com/tforceaio/tf-unifiler/config"
 	"github.com/tforceaio/tf-unifiler/core/compression"
+	"github.com/tforceaio/tf-unifiler/diag"
+	"github.com/tforceaio/tf-unifiler/filesys"
+	"github.com/tforceaio/tf-unifiler/filesys/exec"
+	"github.com/tforceaio/tf-unifiler/internal/nullable"
+	"github.com/tforceaio/tf-unifiler/tui"
 )
+
+// Pack inputs (files/folders) into an archive.
+func createArchive(
+	inputs []string, archive string, format string, level compression.Level, solid nullable.Bool, dictSize int, password string, threads nullable.Int, move bool,
+	pathConfig *config.PathConfig, notifier diag.Notifier, tuiMode bool,
+) error {
+	p := diag.NewProgressTracker("Pack files", notifier)
+	defer p.Done()
+	p.Status(archive)
+
+	var args exec.CommandArgs
+	var executable string
+
+	dictSizeVal := opx.Ternary(dictSize > 0, strconv.Itoa(dictSize)+"M", "")
+	switch format {
+	case "7z":
+		args = exec.New7zArgs(&exec.X7zOptions{
+			ArchiveName:    archive,
+			ArchiveType:    "7z",
+			Command:        "a",
+			CompressLevel:  nullable.FromInt(to7zCompressLevel(level)),
+			CompressMethod: "LZMA2",
+			DictSize:       dictSizeVal,
+			MoveToArchive:  move,
+			FileNames:      inputs,
+			Password:       password,
+			Recurse:        true,
+			Solid:          opx.Ternary(solid.IsValid, solid.RealValue, false),
+			Threads:        threads,
+		})
+		executable = pathConfig.X7zPath
+	case "rar":
+		args = exec.NewRarArgs(&exec.RarOptions{
+			ArchiveName:   archive,
+			Command:       "a",
+			CompressLevel: nullable.FromInt(toRarCompressLevel(level)),
+			DictSize:      dictSizeVal,
+			MoveToArchive: move,
+			FileNames:     inputs,
+			Password:      password,
+			Recurse:       true,
+			Solid:         solid,
+			Threads:       threads,
+		})
+		executable = pathConfig.RarPath
+	default:
+		return errors.New("unsupported archive format: " + format)
+	}
+
+	_, err := exec.Run(executable, args, !tuiMode)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// Derive archive name from input.
+func getArchiveName(input string, ext string) string {
+	base := filepath.Base(input)
+	isDir, err := filesys.IsDirectory(input)
+	if err != nil {
+		isDir = false
+	}
+
+	if isDir {
+		return base + ext
+	}
+
+	nameWithoutExt := strings.TrimSuffix(base, filepath.Ext(base))
+	return nameWithoutExt + ext
+}
+
+// Multi-pack inputs (files/folders) into an archives.
+func packFiles(
+	inputs []string, output string, format string, level compression.Level, solid nullable.Bool, dictSize int, password string, threadNum nullable.Int, move bool, separate bool,
+	pathConfig *config.PathConfig, notifier diag.Notifier, tuiMode bool,
+) ([]string, error) {
+	if n, ok := notifier.(*tui.BubbleteaNotifier); ok && tuiMode {
+		ps := tui.RunProcessStatus(n)
+		defer ps.Stop()
+		inputCount := opx.Ternary(separate, len(inputs), 1)
+		n.SetTotal(uint64(inputCount))
+	}
+
+	var results []string
+
+	if separate {
+		for _, input := range inputs {
+			archiveName := getArchiveName(input, "."+format)
+			archivePath := filesys.Join(output, archiveName)
+			sInput := input
+			if isDir, err := filesys.IsDirectory(input); isDir && err == nil {
+				sInput += string(os.PathSeparator) + "**"
+			}
+			if err := createArchive([]string{sInput}, archivePath, format, level, solid, dictSize, password, threadNum, move, pathConfig, notifier, tuiMode); err != nil {
+				return nil, err
+			}
+			results = append(results, archivePath)
+		}
+	} else {
+		if err := createArchive(inputs, output, format, level, solid, dictSize, password, threadNum, move, pathConfig, notifier, tuiMode); err != nil {
+			return nil, err
+		}
+		results = append(results, output)
+	}
+
+	return results, nil
+}
 
 func to7zCompressLevel(level compression.Level) int {
 	switch level {
