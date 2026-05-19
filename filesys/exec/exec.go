@@ -1,4 +1,4 @@
-// Copyright (C) 2024 T-Force I/O
+// Copyright (C) 2025 T-Force I/O
 // This file is part of TFunifiler
 //
 // TFunifiler is free software: you can redistribute it and/or modify
@@ -17,6 +17,7 @@
 package exec
 
 import (
+	"os"
 	"os/exec"
 )
 
@@ -24,12 +25,17 @@ type CommandArgs interface {
 	Compile() []string
 }
 
-func Run(app string, arg CommandArgs) (string, error) {
+// Run an app and wait for it to finish. Passthrough will redirect the app stdin, stdout, and stderr to current process.
+func Run(app string, arg CommandArgs, passthrough bool) (string, error) {
 	cmd := exec.Command(app, arg.Compile()...)
-	stdout, err := cmd.Output()
-
-	if err != nil {
+	if passthrough {
+		cmd.Stdin = os.Stdin
+		cmd.Stdout = os.Stdout
+		cmd.Stderr = os.Stderr
+		err := cmd.Run()
 		return "", err
 	}
-	return string(stdout), nil
+
+	stdout, err := cmd.Output()
+	return string(stdout), err
 }
