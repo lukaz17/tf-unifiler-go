@@ -19,8 +19,15 @@
 package filesys
 
 import (
+	"os"
 	"time"
 )
+
+// Set multiple attributes (Archive, ReadOnly, Hidden, System) of a file or folder at once. Does nothing on Unix-like system.
+func SetAttribute(path string, archive, readOnly, hidden, system int) error {
+	return nil
+}
+
 
 // Set Archive attribute of a file or folder. Does nothing on Unix-like system.
 func SetArchiveAttribute(path string, enable bool) error {
@@ -45,4 +52,9 @@ func SetReadOnlyAttribute(path string, enable bool) error {
 // Set System attribute of a file or folder. Does nothing on Unix-like system.
 func SetSystemAttribute(path string, enable bool) error {
 	return nil
+}
+
+// Set Created time, Access time, Modified time of time of a file or folder.
+func SetTime(path string, ctime, atime, mtime time.Time) error {
+	return os.Chtimes(path, atime, mtime)
 }

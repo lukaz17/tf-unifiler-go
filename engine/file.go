@@ -86,7 +86,7 @@ func (m *FileModule) Hash(inputs []string) error {
 }
 
 // Multi-pack inputs (files/folders) into an archives.
-func (m *FileModule) Pack(inputs []string, output string, format string, level string, solid bool, dictSize int, password string, threads int, move bool, separate bool) error {
+func (m *FileModule) Pack(inputs []string, output string, format string, level string, solid bool, dictSize int, password string, threads int, move bool, normalize bool, separate bool) error {
 	if err := validateInputs(inputs); err != nil {
 		return err
 	}
@@ -107,6 +107,7 @@ func (m *FileModule) Pack(inputs []string, output string, format string, level s
 		Str("compress", level).
 		Str("format", format).
 		Bool("move", move).
+		Bool("normalize", normalize).
 		Bool("separateInputs", separate).
 		Bool("solid", solid).
 		Int("dictSize", dictSize).
@@ -121,7 +122,7 @@ func (m *FileModule) Pack(inputs []string, output string, format string, level s
 	if threads > 0 {
 		threadNum = nullable.FromInt(threads)
 	}
-	packResults, err := packFiles(inputs, output, format, compressLevel, solidMode, dictSize, password, threadNum, move, separate, m.cfg.Path, m.notifier, false)
+	packResults, err := packFiles(inputs, output, format, compressLevel, solidMode, dictSize, password, threadNum, move, normalize, separate, m.cfg.Path, m.notifier, false)
 	if err != nil {
 		return err
 	}
@@ -273,13 +274,14 @@ func FileCmd() *cobra.Command {
 			defer c.Close()
 			flags := ParseFileFlags(cmd, args)
 			m := NewFileModule(c, "pack")
-			m.logError(m.Pack(flags.Inputs, flags.Output, flags.Format, flags.Level, flags.Solid, flags.DictSize, flags.Password, flags.Threads, flags.Move, flags.Separate))
+			m.logError(m.Pack(flags.Inputs, flags.Output, flags.Format, flags.Level, flags.Solid, flags.DictSize, flags.Password, flags.Threads, flags.Move, flags.Normalize, flags.Separate))
 		},
 	}
 	packCmd.Flags().IntP("dict", "d", 0, "Dictionary size in MB for compression (0 = use default).")
 	packCmd.Flags().StringP("format", "f", "", "Archive format: rar or 7z.")
 	packCmd.Flags().StringP("level", "l", "normal", "Compression level: none (0), fast (1), normal (2), high (3)")
 	packCmd.Flags().BoolP("move", "m", false, "Move files into archive after compression.")
+	packCmd.Flags().BoolP("normalize", "n", false, "Normalize file attributes before compression.")
 	packCmd.Flags().StringP("output", "o", "", "Output archive file path.")
 	packCmd.Flags().StringP("password", "p", "", "Password to protect the archive.")
 	packCmd.Flags().BoolP("separate", "e", false, "Compress each input into a separate archive.")
@@ -306,17 +308,18 @@ func FileCmd() *cobra.Command {
 
 // Struct FileFlags contains all flags used by File module.
 type FileFlags struct {
-	DictSize int
-	Format   string
-	Inputs   []string
-	Level    string
-	Move     bool
-	Output   string
-	Password string
-	Preset   string
-	Separate bool
-	Solid    bool
-	Threads  int
+	DictSize  int
+	Format    string
+	Inputs    []string
+	Level     string
+	Move      bool
+	Normalize bool
+	Output    string
+	Password  string
+	Preset    string
+	Separate  bool
+	Solid     bool
+	Threads   int
 }
 
 // Extract all flags from a Cobra Command.
@@ -326,6 +329,7 @@ func ParseFileFlags(cmd *cobra.Command, args []string) *FileFlags {
 	inputs, _ := cmd.Flags().GetStringArray("inputs")
 	level, _ := cmd.Flags().GetString("level")
 	move, _ := cmd.Flags().GetBool("move")
+	normalize, _ := cmd.Flags().GetBool("normalize")
 	output, _ := cmd.Flags().GetString("output")
 	password, _ := cmd.Flags().GetString("password")
 	preset, _ := cmd.Flags().GetString("preset")
@@ -335,16 +339,17 @@ func ParseFileFlags(cmd *cobra.Command, args []string) *FileFlags {
 	inputs = append(args, inputs...)
 
 	return &FileFlags{
-		DictSize: dictSize,
-		Format:   format,
-		Inputs:   inputs,
-		Level:    level,
-		Move:     move,
-		Output:   output,
-		Password: password,
-		Preset:   preset,
-		Separate: separate,
-		Solid:    solid,
-		Threads:  threads,
+		DictSize:  dictSize,
+		Format:    format,
+		Inputs:    inputs,
+		Level:     level,
+		Move:      move,
+		Normalize: normalize,
+		Output:    output,
+		Password:  password,
+		Preset:    preset,
+		Separate:  separate,
+		Solid:     solid,
+		Threads:   threads,
 	}
 }

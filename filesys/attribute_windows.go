@@ -19,34 +19,96 @@
 package filesys
 
 import (
+	"fmt"
 	"time"
 
 	"golang.org/x/sys/windows"
 )
+
+// Set multiple attributes (Archive, ReadOnly, Hidden, System) of a file or folder at once.
+// archive, readOnly, hidden, system: +1 to enable, -1 to disable, 0 to keep existing value.
+func SetAttribute(path string, archive, readOnly, hidden, system int) error {
+	ptr, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return err
+	}
+	attrs, err := windows.GetFileAttributes(ptr)
+	if err != nil {
+		return err
+	}
+
+	applyAttr := func(flag uint32, val int) {
+		if val > 0 {
+			attrs |= flag
+		} else if val < 0 {
+			attrs &^= flag
+		}
+	}
+
+	applyAttr(windows.FILE_ATTRIBUTE_ARCHIVE, archive)
+	applyAttr(windows.FILE_ATTRIBUTE_READONLY, readOnly)
+	applyAttr(windows.FILE_ATTRIBUTE_HIDDEN, hidden)
+	applyAttr(windows.FILE_ATTRIBUTE_SYSTEM, system)
+
+	return windows.SetFileAttributes(ptr, attrs)
+}
 
 // Set Archive attribute of a file or folder.
 func SetArchiveAttribute(path string, enable bool) error {
 	return setFileAttribute(path, windows.FILE_ATTRIBUTE_ARCHIVE, enable)
 }
 
-// Set Created time of a file or folder.
-func SetCreatedTime(path string, ctime time.Time) error {
-	ft := windows.NsecToFiletime(ctime.UnixNano())
-	handle, err := windows.CreateFile(windows.StringToUTF16Ptr(path),
-		windows.GENERIC_WRITE,
-		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE,
-		nil, windows.OPEN_EXISTING, 0, 0)
+// Set Created time, Access time, Modified time of time of a file or folder.
+func SetTime(path string, ctime, atime, mtime time.Time) error {
+	pathPtr, err := windows.UTF16PtrFromString(path)
 	if err != nil {
-		return err
+		return fmt.Errorf("invalid path: %w", err)
+	}
+	handle, err := windows.CreateFile(
+		pathPtr,
+		windows.FILE_WRITE_ATTRIBUTES,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE,
+		nil,
+		windows.OPEN_EXISTING,
+		windows.FILE_ATTRIBUTE_NORMAL,
+		0,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
 	}
 	defer windows.CloseHandle(handle)
+	ctimew := windows.NsecToFiletime(ctime.UnixNano())
+	atimew := windows.NsecToFiletime(atime.UnixNano())
+	mtimew := windows.NsecToFiletime(mtime.UnixNano())
+	return windows.SetFileTime(handle, &ctimew, &atimew, &mtimew)
+}
 
-	var stime, atime, mtime windows.Filetime
-	err = windows.GetFileTime(handle, &stime, &atime, &mtime)
+// Set Created time of a file or folder.
+func SetCreatedTime(path string, ctime time.Time) error {
+	pathPtr, err := windows.UTF16PtrFromString(path)
+	if err != nil {
+		return fmt.Errorf("invalid path: %w", err)
+	}
+	handle, err := windows.CreateFile(
+		pathPtr,
+		windows.FILE_WRITE_ATTRIBUTES,
+		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE,
+		nil,
+		windows.OPEN_EXISTING,
+		windows.FILE_ATTRIBUTE_NORMAL,
+		0,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to open file: %w", err)
+	}
+	defer windows.CloseHandle(handle)
+	var ctimew, atimew, mtimew windows.Filetime
+	err = windows.GetFileTime(handle, &ctimew, &atimew, &mtimew)
 	if err != nil {
 		return err
 	}
-	return windows.SetFileTime(handle, &ft, &atime, &mtime)
+	ctimew = windows.NsecToFiletime(ctime.UnixNano())
+	return windows.SetFileTime(handle, &ctimew, &atimew, &mtimew)
 }
 
 // Set Hidden attribute of a file or folder.

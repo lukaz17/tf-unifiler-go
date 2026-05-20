@@ -107,7 +107,7 @@ func getArchiveName(input string, ext string) string {
 
 // Multi-pack inputs (files/folders) into an archives.
 func packFiles(
-	inputs []string, output string, format string, level compression.Level, solid nullable.Bool, dictSize int, password string, threadNum nullable.Int, move bool, separate bool,
+	inputs []string, output string, format string, level compression.Level, solid nullable.Bool, dictSize int, password string, threadNum nullable.Int, move bool, normalize bool, separate bool,
 	pathConfig *config.PathConfig, notifier diag.Notifier, tuiMode bool,
 ) ([]string, error) {
 	if n, ok := notifier.(*tui.BubbleteaNotifier); ok && tuiMode {
@@ -127,12 +127,34 @@ func packFiles(
 			if isDir, err := filesys.IsDirectory(input); isDir && err == nil {
 				sInput += string(os.PathSeparator) + "**"
 			}
+			if normalize {
+				contents, err := filesys.List([]string{input}, true)
+				if err != nil {
+					return nil, err
+				}
+				for _, c := range contents {
+					if err := normalizeAttributes(c.RelativePath); err != nil {
+						return nil, err
+					}
+				}
+			}
 			if err := createArchive([]string{sInput}, archivePath, format, level, solid, dictSize, password, threadNum, move, pathConfig, notifier, tuiMode); err != nil {
 				return nil, err
 			}
 			results = append(results, archivePath)
 		}
 	} else {
+		if normalize {
+			contents, err := filesys.List(inputs, true)
+			if err != nil {
+				return nil, err
+			}
+			for _, c := range contents {
+				if err := normalizeAttributes(c.RelativePath); err != nil {
+					return nil, err
+				}
+			}
+		}
 		if err := createArchive(inputs, output, format, level, solid, dictSize, password, threadNum, move, pathConfig, notifier, tuiMode); err != nil {
 			return nil, err
 		}
