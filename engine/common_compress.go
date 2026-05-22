@@ -23,6 +23,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/rs/zerolog"
 	"github.com/tforce-io/tf-golib/opx"
 	"github.com/tforceaio/tf-unifiler/config"
 	"github.com/tforceaio/tf-unifiler/core/compression"
@@ -36,7 +37,7 @@ import (
 // Pack inputs (files/folders) into an archive.
 func createArchive(
 	inputs []string, archive string, format string, level compression.Level, solid nullable.Bool, dictSize int, password string, threads nullable.Int, move bool,
-	pathConfig *config.PathConfig, notifier diag.Notifier, tuiMode bool,
+	pathConfig *config.PathConfig, logger zerolog.Logger, notifier diag.Notifier, tuiMode bool,
 ) error {
 	p := diag.NewProgressTracker("Pack files", notifier)
 	defer p.Done()
@@ -86,6 +87,11 @@ func createArchive(
 		return err
 	}
 
+	if !tuiMode {
+		logger.Info().
+			Str("archive", archive).
+			Msg("Packed files.")
+	}
 	return nil
 }
 
@@ -108,7 +114,7 @@ func getArchiveName(input string, ext string) string {
 // Multi-pack inputs (files/folders) into an archives.
 func packFiles(
 	inputs []string, output string, format string, level compression.Level, solid nullable.Bool, dictSize int, password string, threadNum nullable.Int, move bool, normalize bool, separate bool,
-	pathConfig *config.PathConfig, notifier diag.Notifier, tuiMode bool,
+	pathConfig *config.PathConfig, logger zerolog.Logger, notifier diag.Notifier, tuiMode bool,
 ) ([]string, error) {
 	if n, ok := notifier.(*tui.BubbleteaNotifier); ok && tuiMode {
 		ps := tui.RunProcessStatus(n)
@@ -138,7 +144,7 @@ func packFiles(
 					}
 				}
 			}
-			if err := createArchive([]string{sInput}, archivePath, format, level, solid, dictSize, password, threadNum, move, pathConfig, notifier, tuiMode); err != nil {
+			if err := createArchive([]string{sInput}, archivePath, format, level, solid, dictSize, password, threadNum, move, pathConfig, logger, notifier, tuiMode); err != nil {
 				return nil, err
 			}
 			results = append(results, archivePath)
@@ -155,7 +161,7 @@ func packFiles(
 				}
 			}
 		}
-		if err := createArchive(inputs, output, format, level, solid, dictSize, password, threadNum, move, pathConfig, notifier, tuiMode); err != nil {
+		if err := createArchive(inputs, output, format, level, solid, dictSize, password, threadNum, move, pathConfig, logger, notifier, tuiMode); err != nil {
 			return nil, err
 		}
 		results = append(results, output)

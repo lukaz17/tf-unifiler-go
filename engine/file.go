@@ -30,6 +30,7 @@ import (
 	"github.com/tforceaio/tf-unifiler/diag"
 	"github.com/tforceaio/tf-unifiler/filesys"
 	"github.com/tforceaio/tf-unifiler/internal/nullable"
+	"github.com/tforceaio/tf-unifiler/tui"
 )
 
 // Struct FileRenameMapping stores old and new filename after renaming for rollback.
@@ -101,6 +102,30 @@ func (m *FileModule) Pack(inputs []string, output string, format string, level s
 		return err
 	}
 
+	if tui.IsTTY() {
+		opts, err := tui.RunCompressOptions(&tui.CompressOptionsValue{
+			ArchiveType:    format,
+			CompressLevel:  compressLevel,
+			SolidMode:      solid,
+			DictionarySize: dictSize,
+			ThreadNumber:   threads,
+			MoveToArchive:  move,
+			NormalizeAttrs: normalize,
+			SeparateInputs: separate,
+		})
+		if err != nil {
+			return err
+		}
+		format = opts.ArchiveType
+		level = compression.LevelCodes[opts.CompressLevel]
+		solid = opts.SolidMode
+		dictSize = opts.DictionarySize
+		threads = opts.ThreadNumber
+		move = opts.MoveToArchive
+		normalize = opts.NormalizeAttrs
+		separate = opts.SeparateInputs
+	}
+
 	m.logger.Info().
 		Strs("inputs", filesys.NormalizePaths(inputs, true)).
 		Str("output", filesys.NormalizePath(output, true)).
@@ -122,15 +147,18 @@ func (m *FileModule) Pack(inputs []string, output string, format string, level s
 	if threads > 0 {
 		threadNum = nullable.FromInt(threads)
 	}
-	packResults, err := packFiles(inputs, output, format, compressLevel, solidMode, dictSize, password, threadNum, move, normalize, separate, m.cfg.Path, m.notifier, false)
+	tuiMode := false
+	packResults, err := packFiles(inputs, output, format, compressLevel, solidMode, dictSize, password, threadNum, move, normalize, separate, m.cfg.Path, m.logger, m.notifier, tuiMode)
 	if err != nil {
 		return err
 	}
 
-	for _, path := range packResults {
-		m.logger.Info().
-			Str("archive", path).
-			Msg("Packed files.")
+	if tuiMode {
+		for _, path := range packResults {
+			m.logger.Info().
+				Str("archive", path).
+				Msg("Packed files.")
+		}
 	}
 
 	return nil
