@@ -31,6 +31,14 @@ const (
 	Ultra
 )
 
+var LevelCodes = map[Level]string{
+	None:   "none",
+	Fast:   "fast",
+	Normal: "normal",
+	High:   "high",
+	Ultra:  "ultra",
+}
+
 var LevelNames = map[string]Level{
 	"none":   None,
 	"fast":   Fast,

@@ -19,10 +19,11 @@ package tui
 import "charm.land/lipgloss/v2"
 
 var (
-	styleAction   = lipgloss.NewStyle().Bold(true)
-	styleItem     = lipgloss.NewStyle().Bold(true)
-	styleLabel    = lipgloss.NewStyle().Bold(true)
-	styleShortcut = lipgloss.NewStyle().Bold(true).Reverse(true)
-	styleError    = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	styleWarning  = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+	actionStyle   = lipgloss.NewStyle().Bold(true)
+	itemStyle     = lipgloss.NewStyle().Bold(true)
+	labelStyle    = lipgloss.NewStyle().Bold(true)
+	shortcutStyle = lipgloss.NewStyle().Bold(true).Reverse(true)
+
+	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
+	warningStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
 )

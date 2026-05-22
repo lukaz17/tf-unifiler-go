@@ -34,6 +34,14 @@ func (p *TeaProgramHandle) Stop() {
 	<-p.done
 }
 
+// Run CompressOptions and show it on the terminal.
+func RunCompressOptions(defaults *CompressOptionsValue) (*CompressOptionsValue, error) {
+	m := NewCompressOptions().
+		WithSelected(defaults)
+
+	return m.Run()
+}
+
 // Run ProcessStatus and show it on the terminal.
 func RunProcessStatus(notifier *BubbleteaNotifier) *TeaProgramHandle {
 	m := NewProcessStatus()
