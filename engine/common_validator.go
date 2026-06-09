@@ -20,8 +20,21 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/tforceaio/tf-unifiler/db"
 	"github.com/tforceaio/tf-unifiler/filesys"
 )
+
+// Check a anchive name is available for create or update.
+func validateArchiveName(ctx *db.DbContext, archiveName string, update bool) error {
+	existingArchive, err := ctx.GetArchiveByName(archiveName)
+	if err != nil {
+		return fmt.Errorf("failed to get archive: %w", err)
+	}
+	if existingArchive != nil && !update {
+		return fmt.Errorf("archive %q already exists, use --update to add contents to it", archiveName)
+	}
+	return nil
+}
 
 // Check for non empty input and its existence on disk.
 func validateInput(input, label string) error {

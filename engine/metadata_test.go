@@ -87,7 +87,7 @@ func TestFileSaveHResults(t *testing.T) {
 				logger: log.Logger,
 			}
 			for j, ss := range tt.sessions {
-				module.saveHResults(ctx, ss, false, tt.collections[j])
+				module.saveHResults(ctx, ss, false, tt.collections[j], "", "", false)
 			}
 			lastSession, err := ctx.GetLatestSession()
 			if err != nil {
