@@ -52,89 +52,10 @@ func NewMetadataModule(c *Controller, cmdName string) *MetadataModule {
 	}
 }
 
-// Compute hashes of inputs (files/folders) and refining their contents.
-// All files in collections are used by default for matching, onlyObsoleted will use obsoleted files only.
-// Invert will match non-existed files in database instead.
-// Erase will delete the file directly instead of moving them.
-func (m *MetadataModule) Refine(workspaceDir string, inputs, collections []string, onlyObsoleted, invert, erase bool) error {
-	if err := validateWorkspace(workspaceDir); err != nil {
-		return err
-	}
-	if err := validateInputs(inputs); err != nil {
-		return err
-	}
-	m.logger.Info().
-		Strs("collections", collections).
-		Bool("erase", erase).
-		Strs("files", filesys.NormalizePaths(inputs, true)).
-		Bool("invert", invert).
-		Bool("onlyObsoleted", onlyObsoleted).
-		Str("workspace", filesys.NormalizePath(workspaceDir, true)).
-		Msg("Start refining file system.")
-
-	algos := []string{"crc32", "md5", "sha1", "sha256", "sha512"}
-	fhResults, err := listAndHashFiles(inputs, algos, true, m.notifier)
-	if err != nil {
-		return err
-	}
-
-	dbFile := MetadataWorkspaceDatabase(workspaceDir)
-	ctx, err := db.Connect(dbFile)
-	if err != nil {
-		return err
-	}
-
-	for _, r := range fhResults {
-		sha256 := hex.EncodeToString(r.Hashes[3].Hash)
-		m.logger.Info().
-			Str("crc32", hex.EncodeToString(r.Hashes[0].Hash)).
-			Str("md5", hex.EncodeToString(r.Hashes[1].Hash)).
-			Str("path", filesys.NormalizePath(r.Entry.RelativePath, true)).
-			Str("sha1", hex.EncodeToString(r.Hashes[2].Hash)).
-			Str("sha256", sha256).
-			Int("size", r.Hashes[0].Size).
-			Msg("Hashed file.")
-		metadatas, err := ctx.GetHashesInSets(collections, []string{sha256}, onlyObsoleted)
-		if err != nil {
-			return err
-		}
-		noMetadata := len(metadatas) == 0
-		if invert == noMetadata {
-			newFile := strfmt.NewPathFromStr(r.Entry.AbsolutePath)
-			intDir := opx.Ternary(invert, ".extra", ".backup")
-			newFile.Parents = append(newFile.Parents, intDir)
-			if erase {
-				err = os.Remove(r.Entry.AbsolutePath)
-			} else {
-				err = filesys.CreateDirectoryRecursive(newFile.ParentPath())
-				if err != nil {
-					return err
-				}
-				err = os.Rename(r.Entry.AbsolutePath, newFile.FullPath())
-			}
-			if err != nil {
-				return err
-			}
-			if erase {
-				m.logger.Info().
-					Str("path", filesys.NormalizePath(r.Entry.RelativePath, true)).
-					Msg("Deleted file.")
-			} else {
-				m.logger.Info().
-					Str("src", filesys.NormalizePath(r.Entry.RelativePath, true)).
-					Str("dest", filesys.NormalizePath(newFile.FullPath(), true)).
-					Msg("Moved file.")
-			}
-		}
-	}
-
-	return nil
-}
-
 // Scan and compute hashes using common algorithms (CRC32, MD5, SHA-1, SHA-256, SHA-512) for inputs (files/folders)
 // and add them to collection.
 // Mark them as obseleted if delete is true.
-func (m *MetadataModule) Scan(workspaceDir string, inputs, collections []string, delete bool, archiveName string, update bool) error {
+func (m *MetadataModule) Index(workspaceDir string, inputs, collections []string, delete bool, archiveName string, update bool) error {
 	if err := validateWorkspace(workspaceDir); err != nil {
 		return err
 	}
@@ -231,9 +152,88 @@ func (m *MetadataModule) Scan(workspaceDir string, inputs, collections []string,
 			return err
 		}
 	}
-	err = m.saveHResults(ctx, hResults, delete, collections, archiveName, rootDir, update)
+	err = m.saveIResults(ctx, hResults, delete, collections, archiveName, rootDir, update)
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+// Compute hashes of inputs (files/folders) and refining their contents.
+// All files in collections are used by default for matching, onlyObsoleted will use obsoleted files only.
+// Invert will match non-existed files in database instead.
+// Erase will delete the file directly instead of moving them.
+func (m *MetadataModule) Refine(workspaceDir string, inputs, collections []string, onlyObsoleted, invert, erase bool) error {
+	if err := validateWorkspace(workspaceDir); err != nil {
+		return err
+	}
+	if err := validateInputs(inputs); err != nil {
+		return err
+	}
+	m.logger.Info().
+		Strs("collections", collections).
+		Bool("erase", erase).
+		Strs("files", filesys.NormalizePaths(inputs, true)).
+		Bool("invert", invert).
+		Bool("onlyObsoleted", onlyObsoleted).
+		Str("workspace", filesys.NormalizePath(workspaceDir, true)).
+		Msg("Start refining file system.")
+
+	algos := []string{"crc32", "md5", "sha1", "sha256", "sha512"}
+	fhResults, err := listAndHashFiles(inputs, algos, true, m.notifier)
+	if err != nil {
+		return err
+	}
+
+	dbFile := MetadataWorkspaceDatabase(workspaceDir)
+	ctx, err := db.Connect(dbFile)
+	if err != nil {
+		return err
+	}
+
+	for _, r := range fhResults {
+		sha256 := hex.EncodeToString(r.Hashes[3].Hash)
+		m.logger.Info().
+			Str("crc32", hex.EncodeToString(r.Hashes[0].Hash)).
+			Str("md5", hex.EncodeToString(r.Hashes[1].Hash)).
+			Str("path", filesys.NormalizePath(r.Entry.RelativePath, true)).
+			Str("sha1", hex.EncodeToString(r.Hashes[2].Hash)).
+			Str("sha256", sha256).
+			Int("size", r.Hashes[0].Size).
+			Msg("Hashed file.")
+		metadatas, err := ctx.GetHashesInSets(collections, []string{sha256}, onlyObsoleted)
+		if err != nil {
+			return err
+		}
+		noMetadata := len(metadatas) == 0
+		if invert == noMetadata {
+			newFile := strfmt.NewPathFromStr(r.Entry.AbsolutePath)
+			intDir := opx.Ternary(invert, ".extra", ".backup")
+			newFile.Parents = append(newFile.Parents, intDir)
+			if erase {
+				err = os.Remove(r.Entry.AbsolutePath)
+			} else {
+				err = filesys.CreateDirectoryRecursive(newFile.ParentPath())
+				if err != nil {
+					return err
+				}
+				err = os.Rename(r.Entry.AbsolutePath, newFile.FullPath())
+			}
+			if err != nil {
+				return err
+			}
+			if erase {
+				m.logger.Info().
+					Str("path", filesys.NormalizePath(r.Entry.RelativePath, true)).
+					Msg("Deleted file.")
+			} else {
+				m.logger.Info().
+					Str("src", filesys.NormalizePath(r.Entry.RelativePath, true)).
+					Str("dest", filesys.NormalizePath(newFile.FullPath(), true)).
+					Msg("Moved file.")
+			}
+		}
 	}
 
 	return nil
@@ -371,7 +371,7 @@ func (m *MetadataModule) logError(err error) {
 }
 
 // Save hashing results to metadata database along with their respective collections.
-func (m *MetadataModule) saveHResults(ctx *db.DbContext, hResults []*core.FileMultiHash, ignore bool, collections []string, archiveName string, rootDir string, update bool) (err error) {
+func (m *MetadataModule) saveIResults(ctx *db.DbContext, hResults []*core.FileMultiHash, ignore bool, collections []string, archiveName string, rootDir string, update bool) (err error) {
 	sessionID, err := uuid.NewV7()
 	if err != nil {
 		m.logger.Info().Msg("Failed to generate SessionID.")
@@ -507,6 +507,24 @@ func MetadataCmd() *cobra.Command {
 	}
 	rootCmd.PersistentFlags().StringP("workspace", "w", "", "Directory contains Unifiler workspace.")
 
+	indexCmd := &cobra.Command{
+		Use:   "index <input>...",
+		Short: "Scan inputs for file metadata.",
+		Run: func(cmd *cobra.Command, args []string) {
+			c := InitApp()
+			defer c.Close()
+			flags := ParseMetadataFlags(cmd, args)
+			m := NewMetadataModule(c, "scan")
+			m.logError(m.Index(flags.WorkspaceDir, flags.Inputs, flags.Collections, flags.Deleted, flags.Name, false))
+		},
+	}
+	indexCmd.Flags().StringSliceP("collections", "c", []string{}, "Names of collections of known files, comma-separated list supported. If a collection existed, files will be appended to that collection.")
+	indexCmd.Flags().Bool("delete", false, "Mark the inputs as obsoleted.")
+	indexCmd.Flags().StringArrayP("inputs", "i", []string{}, "Files/Directories to hash.")
+	indexCmd.Flags().StringP("name", "n", "", "Name for the archive in database (Defaults to directory name)")
+	indexCmd.Flags().Bool("update", false, "Allow update current archive if exists.")
+	rootCmd.AddCommand(indexCmd)
+
 	refineCmd := &cobra.Command{
 		Use:   "refine <input>...",
 		Short: "Refine inputs against metadata database.",
@@ -524,24 +542,6 @@ func MetadataCmd() *cobra.Command {
 	refineCmd.Flags().Bool("invert", false, "Take action on non-matched files instead of matched ones.")
 	refineCmd.Flags().BoolP("obsoleted", "o", false, "Only match obsoleted files.")
 	rootCmd.AddCommand(refineCmd)
-
-	scanCmd := &cobra.Command{
-		Use:   "scan <input>...",
-		Short: "Scan inputs for file metadata.",
-		Run: func(cmd *cobra.Command, args []string) {
-			c := InitApp()
-			defer c.Close()
-			flags := ParseMetadataFlags(cmd, args)
-			m := NewMetadataModule(c, "scan")
-			m.logError(m.Scan(flags.WorkspaceDir, flags.Inputs, flags.Collections, flags.Deleted, flags.Name, false))
-		},
-	}
-	scanCmd.Flags().StringSliceP("collections", "c", []string{}, "Names of collections of known files, comma-separated list supported. If a collection existed, files will be appended to that collection.")
-	scanCmd.Flags().Bool("delete", false, "Mark the inputs as obsoleted.")
-	scanCmd.Flags().StringArrayP("inputs", "i", []string{}, "Files/Directories to hash.")
-	scanCmd.Flags().StringP("name", "n", "", "Name for the archive in database (Defaults to directory name)")
-	scanCmd.Flags().Bool("update", false, "Allow update current archive if exists.")
-	rootCmd.AddCommand(scanCmd)
 
 	rootCmd.AddCommand(metadataQueryCmd())
 
