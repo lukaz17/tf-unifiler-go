@@ -53,6 +53,14 @@ func validateSingleInput(inputs []string) error {
 	return nil
 }
 
+// Check that a string value is not empty.
+func validateRequiredString(input, label string) error {
+	if input == "" {
+		return fmt.Errorf("%s is not set", label)
+	}
+	return nil
+}
+
 // Check for not empty workspace and its existence on disk.
 func validateWorkspace(ws string) error {
 	if ws == "" {
