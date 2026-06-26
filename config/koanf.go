@@ -19,6 +19,7 @@ package config
 import (
 	"os"
 	"path"
+	"path/filepath"
 	"runtime"
 	"strings"
 
@@ -27,49 +28,34 @@ import (
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
-	"github.com/tforceaio/tf-unifiler/filesys"
 )
 
-// Singleton instance of configuration.
 var cfg *RootConfig
 
-// Initialize RootConfiguration follow the sequence:
-// Default values -> YML file (f) -> Environment variable.
-// The latter will override the former.
-// YML file will only be used if useFS is true.
-func BuildConfig(useFS bool, f string) (*RootConfig, error) {
-	k := defaultConfig()
-	if useFS && filesys.IsFileExist(f) {
-		k, _ = configFromYaml(k, f)
-	}
-	k, _ = configFromEnv(k)
+const configFileName = "unifiler.yaml"
 
-	var config RootConfig
-	err := k.Unmarshal("", &config)
-	return &config, err
-}
-
-// Entrypoint for creating RootConfiguration instance using Koanf.
-// YML file will only be used if useFS is true.
+// Init configuration for the application.
 func InitKoanf(useFS bool) (*RootConfig, error) {
 	if cfg != nil {
 		return cfg, nil
 	}
+
 	isPortable := !useFS || IsPortable()
-	configFile := "unifiler.yml"
+	configFile := configFileName
+
 	if isPortable {
 		exec, _ := os.Executable()
-		exec, _ = filesys.GetAbsPath(exec)
-		configFile = path.Join(path.Dir(exec), "unifiler.yml")
+		configFile = path.Join(path.Dir(exec), configFileName)
 	} else if runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
 		home := os.Getenv("HOME")
-		configFile = path.Join(home, ".config", "unifiler", "unifiler.yml")
+		configFile = path.Join(home, ".config", "unifiler", configFileName)
 	} else if runtime.GOOS == "windows" {
 		appData := os.Getenv("APPDATA")
-		configFile = path.Join(appData, "Unifiler", "unifiler.yml")
+		configFile = path.Join(appData, "Unifiler", configFileName)
 	}
+
 	var err error
-	cfg, err = BuildConfig(useFS, configFile)
+	cfg, err = buildConfig(useFS, configFile)
 	if err != nil {
 		return cfg, err
 	}
@@ -80,17 +66,9 @@ func InitKoanf(useFS bool) (*RootConfig, error) {
 	return cfg, nil
 }
 
-// Detect whether the app is running in portable mode.
-func IsPortable() bool {
-	exec, _ := os.Executable()
-	exec, _ = filesys.GetAbsPath(exec)
-	portableFile := path.Join(path.Dir(exec), "unifiler.portable")
-	return filesys.IsFileExist(portableFile)
-}
-
-// Returns default values for RootConfig
-func defaultConfig() *koanf.Koanf {
-	var k = koanf.New(".")
+// Get default configuration values.
+func DefaultConfig() *koanf.Koanf {
+	k := koanf.New(".")
 
 	k.Load(
 		structs.Provider(RootConfig{
@@ -108,7 +86,28 @@ func defaultConfig() *koanf.Koanf {
 	return k
 }
 
-// Override existing values in Koanf instance with value from environtment variables.
+// Check if the application is in portable mode.
+func IsPortable() bool {
+	exec, _ := os.Executable()
+	portableFile := filepath.Join(filepath.Dir(exec), "unifiler.portable")
+	return fileExists(portableFile)
+}
+
+// Build configurations for the application with the following priority:
+// Environment variables -> YAML configuration file -> default values.
+func buildConfig(useFS bool, f string) (*RootConfig, error) {
+	k := DefaultConfig()
+	if useFS && fileExists(f) {
+		k, _ = configFromYaml(k, f)
+	}
+	k, _ = configFromEnv(k)
+
+	var config RootConfig
+	err := k.Unmarshal("", &config)
+	return &config, err
+}
+
+// Get configuration values from environment variables.
 func configFromEnv(k *koanf.Koanf) (*koanf.Koanf, error) {
 	err := k.Load(env.Provider("TFUNIFILER_", ".", func(s string) string {
 		return strings.Replace(
@@ -121,11 +120,17 @@ func configFromEnv(k *koanf.Koanf) (*koanf.Koanf, error) {
 	return k, nil
 }
 
-// Override existing values in Koanf instance with value from YAML file.
+// Get configuration values from YAML file.
 func configFromYaml(k *koanf.Koanf, f string) (*koanf.Koanf, error) {
 	err := k.Load(file.Provider(f), yaml.Parser())
 	if err != nil {
 		return k, err
 	}
 	return k, nil
+}
+
+// Return whether a file existed in file system.
+func fileExists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
 }
