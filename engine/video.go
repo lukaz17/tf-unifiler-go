@@ -283,7 +283,7 @@ func VideoCmd() *cobra.Command {
 	return rootCmd
 }
 
-// Struct VideoFlags contains all flags used by Video module.
+// VideoFlags contains all flags used by Video module.
 type VideoFlags struct {
 	Inputs    []string
 	Interval  float64

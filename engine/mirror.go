@@ -31,7 +31,7 @@ import (
 	"github.com/tforceaio/tf-unifiler/filesys"
 )
 
-// Struct FileMirrorMapping stores old and new filename after mirroring for rollback.
+// FileMirrorMapping stores old and new filename after mirroring for rollback.
 type FileMirrorMapping struct {
 	Source string `json:"s,omitempty"`
 	Hash   string `json:"h,omitempty"`
@@ -248,7 +248,7 @@ func MirrorCmd() *cobra.Command {
 	return rootCmd
 }
 
-// Struct MirrorFlags contains all flags used by Mirror module.
+// MirrorFlags contains all flags used by Mirror module.
 type MirrorFlags struct {
 	ChecksumFile string
 	Inputs       []string
