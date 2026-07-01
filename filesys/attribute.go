@@ -14,16 +14,27 @@
 // You should have received a copy of the GNU General Public License
 // along with TFunifiler. If not, see <https://www.gnu.org/licenses/>.
 
-package tui
+package filesys
 
-import "charm.land/lipgloss/v2"
-
-var (
-	actionStyle   = lipgloss.NewStyle().Bold(true)
-	itemStyle     = lipgloss.NewStyle().Bold(true)
-	labelStyle    = lipgloss.NewStyle().Bold(true)
-	shortcutStyle = lipgloss.NewStyle().Bold(true).Reverse(true)
-
-	errorStyle   = lipgloss.NewStyle().Foreground(lipgloss.Color("9"))
-	warningStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("11"))
+import (
+	"os"
+	"time"
 )
+
+// Set Access time of a file or directory.
+func SetAccessTime(path string, atime time.Time) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	return os.Chtimes(path, atime, info.ModTime())
+}
+
+// Set Modified time of a file or directory.
+func SetModifiedTime(path string, mtime time.Time) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+	return os.Chtimes(path, info.ModTime(), mtime)
+}
