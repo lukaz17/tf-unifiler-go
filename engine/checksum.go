@@ -124,7 +124,7 @@ func ChecksumCmd() *cobra.Command {
 	return rootCmd
 }
 
-// Struct ChecksumFlags contains all flags used by Checksum module.
+// ChecksumFlags contains all flags used by Checksum module.
 type ChecksumFlags struct {
 	Algorithms []string
 	Inputs     []string

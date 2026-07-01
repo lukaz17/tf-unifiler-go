@@ -33,7 +33,7 @@ import (
 	"github.com/tforceaio/tf-unifiler/tui"
 )
 
-// Struct FileRenameMapping stores old and new filename after renaming for rollback.
+// FileRenameMapping stores old and new filename after renaming for rollback.
 type FileRenameMapping struct {
 	Source string `json:"s,omitempty"`
 	Target string `json:"t,omitempty"`
@@ -334,7 +334,7 @@ func FileCmd() *cobra.Command {
 	return rootCmd
 }
 
-// Struct FileFlags contains all flags used by File module.
+// FileFlags contains all flags used by File module.
 type FileFlags struct {
 	DictSize  int
 	Format    string

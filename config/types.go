@@ -16,16 +16,15 @@
 
 package config
 
-// Struct RootConfig contains all available configurations.
+// RootConfig contains all available configurations for the application.
 type RootConfig struct {
-	ConfigDir  string
-	ConfigFile string
-	IsPortable bool
+	ConfigDir  string      `koanf:"-"`
+	ConfigFile string      `koanf:"-"`
+	IsPortable bool        `koanf:"-"`
 	Path       *PathConfig `koanf:"paths"`
 }
 
-// Struct PathConfig contains configurations related for external dependencies
-// location.
+// PathConfig contains configurations for external dependencies location.
 type PathConfig struct {
 	FFMpegPath      string `koanf:"ffmpeg"`
 	ImageMagickPath string `koanf:"imagemagick"`

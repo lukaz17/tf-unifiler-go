@@ -98,6 +98,7 @@ Licensed under GPL-3.0 license. See COPYING file along with this program for mor
 		Version: version(),
 	}
 	rootCmd.AddCommand(ChecksumCmd())
+	rootCmd.AddCommand(ConfigCmd())
 	rootCmd.AddCommand(FileCmd())
 	rootCmd.AddCommand(MetadataCmd())
 	rootCmd.AddCommand(MirrorCmd())

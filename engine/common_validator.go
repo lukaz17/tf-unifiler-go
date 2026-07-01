@@ -47,7 +47,7 @@ func validateInput(input, label string) error {
 	return nil
 }
 
-// Check for non empty inputs.
+// Check that at least one input is provided.
 func validateInputs(inputs []string) error {
 	if len(inputs) == 0 {
 		return errors.New("inputs is empty")
@@ -55,7 +55,7 @@ func validateInputs(inputs []string) error {
 	return nil
 }
 
-// Check that exactly 1 input is provided.
+// Check that exactly one input is provided.
 func validateSingleInput(inputs []string) error {
 	if len(inputs) == 0 {
 		return errors.New("input is not set")
@@ -66,7 +66,15 @@ func validateSingleInput(inputs []string) error {
 	return nil
 }
 
-// Check for not empty workspace and its existence on disk.
+// Check that a required string parameter is not empty.
+func validateRequiredString(input, label string) error {
+	if input == "" {
+		return fmt.Errorf("%s is not set", label)
+	}
+	return nil
+}
+
+// Check that workspace is set and exists as a directory on disk.
 func validateWorkspace(ws string) error {
 	if ws == "" {
 		return errors.New("workspace is not set")

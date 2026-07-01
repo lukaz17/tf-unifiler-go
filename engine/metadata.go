@@ -711,7 +711,7 @@ func metadataQueryCmd() *cobra.Command {
 	return queryCmd
 }
 
-// Struct MetadataFlags contains all flags used by Metadata module.
+// MetadataFlags contains all flags used by Metadata module.
 type MetadataFlags struct {
 	Collections   []string
 	Deleted       bool
