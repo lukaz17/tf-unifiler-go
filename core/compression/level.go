@@ -14,36 +14,48 @@
 // You should have received a copy of the GNU General Public License
 // along with TFunifiler. If not, see <https://www.gnu.org/licenses/>.
 
-package tui
+package compression
 
 import (
-	tea "charm.land/bubbletea/v2"
+	"errors"
+	"fmt"
 )
 
-// TeaProgramHandle provides caller a way to stop the Bubbletea program.
-type TeaProgramHandle struct {
-	program  *tea.Program
-	notifier *BubbleteaNotifier
-	done     chan error
+type Level int
+
+const (
+	None Level = iota
+	Fast
+	Normal
+	High
+	Ultra
+)
+
+var LevelCodes = map[Level]string{
+	None:   "none",
+	Fast:   "fast",
+	Normal: "normal",
+	High:   "high",
+	Ultra:  "ultra",
 }
 
-// Stop running Bubbletea program.
-func (p *TeaProgramHandle) Stop() {
-	p.notifier.setProgram(nil)
-	p.program.Quit()
-	<-p.done
+var LevelNames = map[string]Level{
+	"none":   None,
+	"fast":   Fast,
+	"normal": Normal,
+	"high":   High,
+	"ultra":  Ultra,
 }
 
-// Run CompressOptions and show it on the terminal.
-func RunCompressOptions(defaults *CompressOptionsValue) (*CompressOptionsValue, error) {
-	m := NewCompressOptions().
-		WithSelected(defaults)
+func ParseLevel(name string) (Level, error) {
+	if level, ok := LevelNames[name]; ok {
+		return level, nil
+	}
 
-	return m.Run()
-}
+	var num int
+	if _, err := fmt.Sscanf(name, "%d", &num); err == nil && num >= int(None) && num <= int(Ultra) {
+		return Level(num), nil
+	}
 
-// Run ProcessStatus and show it on the terminal.
-func RunProcessStatus(notifier *BubbleteaNotifier) *TeaProgramHandle {
-	m := NewProcessStatus()
-	return m.Run(notifier)
+	return 0, errors.New("invalid level: " + name)
 }

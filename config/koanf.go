@@ -1,4 +1,4 @@
-// Copyright (C) 2024 T-Force I/O
+// Copyright (C) 2025 T-Force I/O
 // This file is part of TFunifiler
 //
 // TFunifiler is free software: you can redistribute it and/or modify
@@ -98,6 +98,8 @@ func defaultConfig() *koanf.Koanf {
 				FFMpegPath:      "ffmpeg",
 				ImageMagickPath: "magick",
 				MediaInfoPath:   "mediainfo",
+				RarPath:         "rar",
+				X7zPath:         "7z",
 				X264Path:        "x264",
 				X265Path:        "x265",
 			},

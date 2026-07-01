@@ -170,17 +170,17 @@ func (m ProcessStatus) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 func (m ProcessStatus) View() tea.View {
 	var sb strings.Builder
 
-	sb.WriteString(fmt.Sprintf("%s%s\n", styleLabel.Render("Action: "), styleAction.Render(opx.Ternary(m.action == "", "-", m.action))))
-	sb.WriteString(fmt.Sprintf("%s%s\n", styleLabel.Render("Item:   "), styleItem.Render(opx.Ternary(m.item == "", "-", m.item))))
-	sb.WriteString(fmt.Sprintf("%s%s\n", styleLabel.Render(""), m.itemProgress.ViewAs(m.itemPercent)))
+	sb.WriteString(fmt.Sprintf("%s%s\n", labelStyle.Render("Action: "), actionStyle.Render(opx.Ternary(m.action == "", "-", m.action))))
+	sb.WriteString(fmt.Sprintf("%s%s\n", labelStyle.Render("Item:   "), itemStyle.Render(opx.Ternary(m.item == "", "-", m.item))))
+	sb.WriteString(fmt.Sprintf("%s%s\n", labelStyle.Render(""), m.itemProgress.ViewAs(m.itemPercent)))
 	if m.totalInfinited {
 		if m.totalPercent >= 1 {
-			sb.WriteString(fmt.Sprintf("%s\n", styleLabel.Render("Done.")))
+			sb.WriteString(fmt.Sprintf("%s\n", labelStyle.Render("Done.")))
 		} else {
 			sb.WriteString(fmt.Sprintf("%s%s\n", "Please wait", m.itemSpinner.View()))
 		}
 	} else {
-		sb.WriteString(fmt.Sprintf("%s%s\n", styleLabel.Render(""), m.totalProgress.ViewAs(m.totalPercent)))
+		sb.WriteString(fmt.Sprintf("%s%s\n", labelStyle.Render(""), m.totalProgress.ViewAs(m.totalPercent)))
 	}
 
 	// Errors
@@ -190,15 +190,15 @@ func (m ProcessStatus) View() tea.View {
 	}
 	for _, e := range shown {
 		if strings.HasPrefix(e, "[WARN]") {
-			sb.WriteString(styleWarning.Render(e))
+			sb.WriteString(warningStyle.Render(e))
 		} else {
-			sb.WriteString(styleError.Render(e))
+			sb.WriteString(errorStyle.Render(e))
 		}
 		sb.WriteString("\n")
 	}
 	if m.allowInterrupt {
 		sb.WriteString(fmt.Sprintf("\n%s interrupt  \n",
-			styleShortcut.Render(" esc "),
+			shortcutStyle.Render(" esc "),
 		))
 	}
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2024 T-Force I/O
+// Copyright (C) 2025 T-Force I/O
 // This file is part of TFunifiler
 //
 // TFunifiler is free software: you can redistribute it and/or modify
@@ -30,6 +30,8 @@ type PathConfig struct {
 	FFMpegPath      string `koanf:"ffmpeg"`
 	ImageMagickPath string `koanf:"imagemagick"`
 	MediaInfoPath   string `koanf:"mediainfo"`
+	RarPath         string `koanf:"rar"`
+	X7zPath         string `koanf:"x7z"`
 	X264Path        string `koanf:"x264"`
 	X265Path        string `koanf:"x265"`
 }

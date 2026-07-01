@@ -19,10 +19,23 @@ package engine
 import (
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/tforceaio/tf-unifiler/db"
 	"github.com/tforceaio/tf-unifiler/filesys"
 )
+
+// Check for valid archive format.
+func validateArchiveFormat(format string) error {
+	if format == "" {
+		return errors.New("format is required")
+	}
+	formats := []string{"7z", "rar"}
+	if slices.Contains(formats, format) {
+		return nil
+	}
+	return fmt.Errorf("unknown format: %s", format)
+}
 
 // Check a anchive name is available for create or update.
 func validateArchiveName(ctx *db.DbContext, archiveName string, update bool) error {

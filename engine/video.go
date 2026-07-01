@@ -68,7 +68,7 @@ func (m *VideoModule) Info(file string) error {
 		OutputFile:   miFile,
 	}
 
-	stdout, err := exec.Run(m.cfg.Path.MediaInfoPath, exec.NewMediaInfoArgs(miOptions))
+	_, err := exec.Run(m.cfg.Path.MediaInfoPath, exec.NewMediaInfoArgs(miOptions), false)
 	if err != nil {
 		return err
 	}
@@ -76,7 +76,6 @@ func (m *VideoModule) Info(file string) error {
 	m.logger.Info().
 		Str("path", filesys.NormalizePath(inputFile, true)).
 		Msg("Analyzed video file.")
-	fmt.Println(stdout)
 	m.logger.Info().
 		Str("path", filesys.NormalizePath(miFile, true)).
 		Msg("Saved video info.")
@@ -161,7 +160,7 @@ func (m *VideoModule) extractFrames(inputFile *filesys.FsEntry, outputRoot strin
 		InputFile:    inputFile.AbsolutePath,
 		OutputFormat: "JSON",
 	}
-	stdout, err := exec.Run(m.cfg.Path.MediaInfoPath, exec.NewMediaInfoArgs(miOptions))
+	stdout, err := exec.Run(m.cfg.Path.MediaInfoPath, exec.NewMediaInfoArgs(miOptions), false)
 	if err != nil {
 		return 0, err
 	}
@@ -219,7 +218,7 @@ func (m *VideoModule) extractFrames(inputFile *filesys.FsEntry, outputRoot strin
 			ffmOptions.VideoFilter = vfHDR
 		}
 
-		_, err := exec.Run(m.cfg.Path.FFMpegPath, exec.NewFFmpegArgs(ffmOptions))
+		_, err := exec.Run(m.cfg.Path.FFMpegPath, exec.NewFFmpegArgs(ffmOptions), false)
 		if err != nil {
 			m.logger.Info().Msg("Failed to take video screenshot.")
 			return 0, err

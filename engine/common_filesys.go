@@ -70,6 +70,23 @@ func listAndHashFiles(inputs []string, algorithms []string, recursive bool, noti
 	return results, nil
 }
 
+// Set file attributes that satisfy the following conditions:
+// - Archive attribute is set to true.
+// - Hidden attribute is set to false.
+// - Read-only attribute is set to false.
+// - Access time, Creation time, and Modified time are all set to February 2, 2020, 12:00:00 UTC.
+func normalizeAttributes(path string) error {
+	if err := filesys.SetAttribute(path, 1, -1, -1, -1); err != nil {
+		return err
+	}
+	time := time.Date(2020, 2, 2, 12, 0, 0, 0, time.UTC)
+	if err := filesys.SetTime(path, time, time, time); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // Write a JSON file with the following path pattern: <dir>/<prefix><timestamp>.json
 func writeJSON(dir, prefix string, data any) (string, error) {
 	currentTimestamp := time.Now().UnixMilli()
