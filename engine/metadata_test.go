@@ -26,8 +26,8 @@ import (
 	"github.com/tforceaio/tf-unifiler/db"
 )
 
-func TestFileSaveHResults(t *testing.T) {
-	ctx := getTestDB("Main", "FileSaveHResults")
+func TestFileSaveIResults(t *testing.T) {
+	ctx := getTestDB("Main", "FileSaveIResults")
 	exes, imgs := testingFileData()
 	tests := []struct {
 		group        string
@@ -87,7 +87,7 @@ func TestFileSaveHResults(t *testing.T) {
 				logger: log.Logger,
 			}
 			for j, ss := range tt.sessions {
-				module.saveHResults(ctx, ss, false, tt.collections[j])
+				module.saveIResults(ctx, ss, false, tt.collections[j], "", "", false)
 			}
 			lastSession, err := ctx.GetLatestSession()
 			if err != nil {
