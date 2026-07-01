@@ -102,11 +102,13 @@ func (m *ConfigModule) Set(key, value string) error {
 	}
 
 	k := koanf.New(".")
-	err := k.Load(file.Provider(m.cfg.ConfigFile), yaml.Parser())
-	if err != nil {
-		return err
+	if _, err := os.Stat(m.cfg.ConfigFile); err == nil {
+		err = k.Load(file.Provider(m.cfg.ConfigFile), yaml.Parser())
+		if err != nil {
+			return err
+		}
 	}
-	err = k.Set(key, value)
+	err := k.Set(key, value)
 	if err != nil {
 		return err
 	}
