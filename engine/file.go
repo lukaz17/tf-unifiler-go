@@ -19,8 +19,10 @@ package engine
 import (
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"path"
+	"strings"
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
@@ -102,7 +104,27 @@ func (m *FileModule) Pack(inputs []string, output string, format string, level s
 		return err
 	}
 
+	m.logger.Info().
+		Strs("inputs", filesys.NormalizePaths(inputs, true)).
+		Str("output", filesys.NormalizePath(output, true)).
+		Str("compress", level).
+		Str("format", format).
+		Bool("move", move).
+		Bool("normalize", normalize).
+		Bool("separateInputs", separate).
+		Bool("solid", solid).
+		Int("dictSize", dictSize).
+		Int("threads", threads).
+		Msg("Packing parameters.")
+	fmtInputs := strings.Builder{}
+	for _, input := range inputs {
+		fmtInputs.WriteString(fmt.Sprintf("\n - %s", input))
+	}
+	fmt.Printf("\nInputs:%s\n", fmtInputs.String())
+	fmt.Printf("\nOutput:\n - %s\n", output)
+
 	if tui.IsTTY() {
+		fmt.Println("")
 		opts, err := tui.RunCompressOptions(&tui.CompressOptionsValue{
 			ArchiveType:    format,
 			CompressLevel:  compressLevel,
@@ -306,8 +328,8 @@ func FileCmd() *cobra.Command {
 		},
 	}
 	packCmd.Flags().IntP("dict", "d", 0, "Dictionary size in MB for compression (0 = use default).")
-	packCmd.Flags().StringP("format", "f", "", "Archive format: rar or 7z.")
-	packCmd.Flags().StringP("level", "l", "normal", "Compression level: none (0), fast (1), normal (2), high (3)")
+	packCmd.Flags().StringP("format", "f", "7z", "Archive format: rar or 7z.")
+	packCmd.Flags().StringP("level", "l", "normal", "Compression level: none (0), fast (1), normal (2), high (3), ultra (4)")
 	packCmd.Flags().BoolP("move", "m", false, "Move files into archive after compression.")
 	packCmd.Flags().BoolP("normalize", "n", false, "Normalize file attributes before compression.")
 	packCmd.Flags().StringP("output", "o", "", "Output archive file path.")
