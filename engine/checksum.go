@@ -25,7 +25,6 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/spf13/cobra"
-	"github.com/tforce-io/tf-golib/opx"
 	"github.com/tforceaio/tf-unifiler/diag"
 	"github.com/tforceaio/tf-unifiler/filesys"
 )
@@ -45,15 +44,18 @@ func NewChecksumModule(c *Controller, cmdName string) *ChecksumModule {
 }
 
 // Create checksum file(s) for inputs using 1 or many algorithms.
-func (m *ChecksumModule) Create(inputs []string, output string, algorithms []string) error {
+func (m *ChecksumModule) Create(inputs []string, outDir string, algorithms []string, outputName string) error {
 	if len(algorithms) == 0 {
 		return errors.New("hash algorithm is not specified")
+	}
+	if err := validateRequiredString(outDir, "outdir"); err != nil {
+		return err
 	}
 
 	m.logger.Info().
 		Strs("algos", algorithms).
 		Strs("files", filesys.NormalizePaths(inputs, true)).
-		Str("output", filesys.NormalizePath(output, true)).
+		Str("output", filesys.NormalizePath(outDir, true)).
 		Msg("Start computing hashes.")
 
 	fhResults, err := listAndHashFiles(inputs, algorithms, true, m.notifier)
@@ -69,17 +71,38 @@ func (m *ChecksumModule) Create(inputs []string, output string, algorithms []str
 			Msg("Hashed file.")
 	}
 
+	outDirAbs, _ := filepath.Abs(outDir)
+	baseName := "checksum"
+	if outputName != "" {
+		baseName = outputName
+	} else if len(inputs) == 1 {
+		if name := strings.TrimSuffix(filepath.Base(inputs[0]), filepath.Ext(inputs[0])); name != "" && name != "." {
+			baseName = name
+		}
+	} else if name := filepath.Base(outDir); name != "" && name != "." && name != string(filepath.Separator) {
+		baseName = name
+	}
+
 	for i, a := range algorithms {
 		fContents := []string{}
 		for _, r := range fhResults {
 			h := r.Hashes[i]
-			line := fmt.Sprintf("%s *%s", hex.EncodeToString(h.Hash), r.Entry.RelativePath)
+			relPath, _ := filepath.Rel(outDirAbs, r.Entry.AbsolutePath)
+			relPath = filesys.NormalizePath(relPath, true)
+			var line string
+			if a == "crc32" {
+				line = fmt.Sprintf("%s %s", relPath, hex.EncodeToString(h.Hash))
+			} else {
+				line = fmt.Sprintf("%s *%s", hex.EncodeToString(h.Hash), relPath)
+			}
 			fContents = append(fContents, line)
 		}
 
-		outputInternal := opx.Ternary(output == "", "checksum", output)
-		// substitute file extension. for more information: https://go.dev/play/p/0wZcne8ZC8G
-		oPath := fmt.Sprintf("%s.%s", strings.TrimSuffix(outputInternal, filepath.Ext(outputInternal)), a)
+		ext := a
+		if a == "crc32" {
+			ext = "sfv"
+		}
+		oPath := filepath.Join(outDir, fmt.Sprintf("[%s].%s", baseName, ext))
 		err := filesys.WriteLines(oPath, fContents)
 		if err != nil {
 			return err
@@ -112,13 +135,13 @@ func ChecksumCmd() *cobra.Command {
 			defer c.Close()
 			flags := ParseChecksumFlags(cmd, args)
 			m := NewChecksumModule(c, "create")
-			m.logError(m.Create(flags.Inputs, flags.Output, flags.Algorithms))
+			m.logError(m.Create(flags.Inputs, flags.Output, flags.Algorithms, flags.OutputName))
 		},
 	}
-	createCmd.Flags().StringSliceP("algo", "a", []string{"sha1"}, "Hash algorithms to use, comma-separated list supported. Supported algorithms: md4, md5, ripemd160, sha1, sha224, sha256, sha384, sha512.")
+	createCmd.Flags().StringSliceP("algorithm", "a", []string{"sha1"}, "Hash algorithms to use, comma-separated list supported. Supported algorithms: crc32, md4, md5, ripemd160, sha1, sha224, sha256, sha384, sha512.")
 	createCmd.Flags().StringArrayP("inputs", "i", []string{}, "Files/Directories to create checksum.")
-	createCmd.Flags().StringP("output", "o", "", "Directory to store the calculated checksum file(s).")
-	createCmd.Flags().StringP("title", "t", "", "Output file name. This will override program smart naming scheme.")
+	createCmd.Flags().StringP("outdir", "o", "", "Directory to store the calculated checksum file(s).")
+	createCmd.Flags().StringP("title", "t", "", "Output file name. This will override program auto-naming scheme.")
 	rootCmd.AddCommand(createCmd)
 
 	return rootCmd
@@ -134,9 +157,13 @@ type ChecksumFlags struct {
 
 // Extract all flags from a Cobra Command.
 func ParseChecksumFlags(cmd *cobra.Command, args []string) *ChecksumFlags {
-	algorithms, _ := cmd.Flags().GetStringSlice("algo")
+	algorithms, _ := cmd.Flags().GetStringSlice("algorithm")
 	inputs, _ := cmd.Flags().GetStringArray("inputs")
+	outdir, _ := cmd.Flags().GetString("outdir")
 	output, _ := cmd.Flags().GetString("output")
+	if output == "" && outdir != "" {
+		output = outdir
+	}
 	outputName, _ := cmd.Flags().GetString("title")
 	inputs = append(args, inputs...)
 
