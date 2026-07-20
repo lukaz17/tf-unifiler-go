@@ -45,6 +45,14 @@ func IsDirectoryUnsafe(dPath string) bool {
 	return isDir
 }
 
+func IsDirectoryEmpty(dPath string) (bool, error) {
+	entries, err := os.ReadDir(dPath)
+	if err != nil {
+		return false, err
+	}
+	return len(entries) == 0, nil
+}
+
 func IsDirectoryExist(fPath string) bool {
 	fileInfo, err := os.Stat(fPath)
 	if os.IsNotExist(err) {

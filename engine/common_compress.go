@@ -147,6 +147,14 @@ func packFiles(
 			if err := createArchive([]string{sInput}, archivePath, format, level, solid, dictSize, password, threadNum, move, pathConfig, logger, notifier, tuiMode); err != nil {
 				return nil, err
 			}
+			if move {
+				if isDir, err := filesys.IsDirectory(input); isDir && err == nil {
+					if isEmpty, err := filesys.IsDirectoryEmpty(input); isEmpty && err == nil {
+						os.Remove(input)
+						logger.Info().Str("path", input).Msg("Removed empty directory.")
+					}
+				}
+			}
 			results = append(results, archivePath)
 		}
 	} else {

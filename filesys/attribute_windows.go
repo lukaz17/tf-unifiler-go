@@ -70,7 +70,7 @@ func SetTime(path string, ctime, atime, mtime time.Time) error {
 		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE,
 		nil,
 		windows.OPEN_EXISTING,
-		windows.FILE_ATTRIBUTE_NORMAL,
+		windows.FILE_ATTRIBUTE_NORMAL|windows.FILE_FLAG_BACKUP_SEMANTICS,
 		0,
 	)
 	if err != nil {
@@ -95,7 +95,7 @@ func SetCreatedTime(path string, ctime time.Time) error {
 		windows.FILE_SHARE_READ|windows.FILE_SHARE_WRITE,
 		nil,
 		windows.OPEN_EXISTING,
-		windows.FILE_ATTRIBUTE_NORMAL,
+		windows.FILE_ATTRIBUTE_NORMAL|windows.FILE_FLAG_BACKUP_SEMANTICS,
 		0,
 	)
 	if err != nil {
