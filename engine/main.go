@@ -29,7 +29,7 @@ import (
 )
 
 var majorVersion = 0
-var minorVersion = 6
+var minorVersion = 7
 var patchVersion = 0
 var gitCommit, gitDate, gitBranch string
 
@@ -40,7 +40,7 @@ func version() string {
 	duration := buildDate.Sub(originDate)
 	minor := minorVersion
 	patch := strconv.Itoa(patchVersion)
-	if gitBranch == "master" {
+	if gitBranch == "master" || gitBranch == "HEAD" {
 		// do nothing
 	} else if gitBranch == "release" {
 		minor += 1
