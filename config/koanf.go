@@ -18,7 +18,6 @@ package config
 
 import (
 	"os"
-	"path"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -45,13 +44,13 @@ func InitKoanf(useFS bool) (*RootConfig, error) {
 
 	if isPortable {
 		exec, _ := os.Executable()
-		configFile = path.Join(path.Dir(exec), configFileName)
+		configFile = filepath.Join(filepath.Dir(exec), configFileName)
 	} else if runtime.GOOS == "linux" || runtime.GOOS == "darwin" {
 		home := os.Getenv("HOME")
-		configFile = path.Join(home, ".config", "unifiler", configFileName)
+		configFile = filepath.Join(home, ".config", "unifiler", configFileName)
 	} else if runtime.GOOS == "windows" {
 		appData := os.Getenv("APPDATA")
-		configFile = path.Join(appData, "Unifiler", configFileName)
+		configFile = filepath.Join(appData, "Unifiler", configFileName)
 	}
 
 	var err error
@@ -60,7 +59,7 @@ func InitKoanf(useFS bool) (*RootConfig, error) {
 		return cfg, err
 	}
 
-	cfg.ConfigDir = path.Dir(configFile)
+	cfg.ConfigDir = filepath.Dir(configFile)
 	cfg.ConfigFile = configFile
 	cfg.IsPortable = isPortable
 	return cfg, nil
